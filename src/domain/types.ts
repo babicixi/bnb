@@ -256,6 +256,34 @@ export interface RefundRecord {
   refundDueVnd: number;
 }
 
+export interface AuditLogEntry {
+  id: Id;
+  actorUserId?: Id;
+  actorRole?: RoleName;
+  action: string;
+  entityType: string;
+  entityId: Id;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  notes?: string;
+  createdAt: Date;
+}
+
+export type CommissionLedgerStatus = "pending" | "approved" | "paid" | "voided";
+
+export interface CommissionLedgerEntry {
+  id: Id;
+  bookingId: Id;
+  salesAgentId: Id;
+  amountVnd: number;
+  ruleId?: Id;
+  status: CommissionLedgerStatus;
+  paidAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  notes?: string;
+}
+
 export interface BookingGuestView {
   bookingNumber: string;
   status: BookingStatus;

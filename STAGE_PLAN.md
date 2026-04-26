@@ -123,19 +123,19 @@ Goal: end-to-end booking flow + role dashboards. Server-rendered EJS, in-memory 
 
 ## Stage 3 — Pricing/content/discount/commission/automation/audit
 
-Status: NOT STARTED.
+Status: IN PROGRESS (operational + audit + commission ledger + pricing + discounts/rules/minibar admin + cleaner availability done; room/building CRUD and richer pricing rules deferred).
 
-- [ ] Pricing management (bulk edit, copy room→room, preview, history)
-- [ ] Discount management (limits, validation, minimum-price guard)
-- [ ] Commission management + commission_ledger table & service
-- [ ] Room/building CRUD with EN/VI fields
-- [ ] Minibar admin CRUD + cleaner usage approval workflow
-- [ ] Cleaner availability mgmt (recurring + max-jobs-per-day, override)
-- [ ] Operational automation services (expireHolds cron, daily checklist, cleaning-after-confirm, etc.)
-- [ ] Audit log table + middleware capturing actor/before/after for booking edits, cancellations, proof invalidation, refund approval, pricing/discount/commission changes, cleaner reassignment
-- [ ] Server-side permission enforcement audit
-- [ ] All Stage 3 tests
-- [ ] README updates
+- [x] Pricing management (single edit, bulk by date range, copy room→room, preview JSON helper). Weekday/weekend filter on bulk edit. History via audit log.
+- [x] Discount management (CRUD + activation toggle, validity window, agent-specific selector). Validation against expiry already enforced at booking time.
+- [x] Commission management + commission_ledger (pending/approved/paid/voided lifecycle, auto-created on booking confirmation, admin actions).
+- [ ] Room/building CRUD with EN/VI fields — deferred.
+- [x] Minibar admin CRUD (item create + activate/deactivate). Approval-by-admin step still TODO.
+- [x] Cleaner availability mgmt (cleaners can add their own windows + toggle). Recurring + max-jobs-per-day deferred.
+- [x] Operational automation: in-process sweep timer (configurable interval) that calls expireOldHolds + expireUnpaidBookings; daily operations checklist view at /admin/today.
+- [x] Audit log table + helper (`audit(repo, req, ...)`) wired into booking edit, cancel, proof-invalid, cleaner reassignment, pricing edit/bulk/copy, discount/commission-rule create+toggle, minibar create+toggle, commission ledger transitions. Admin view at /admin/audit.
+- [~] Server-side permissions: existing role middleware + ownership checks remain in force; explicit per-resource audit deferred.
+- [x] Stage 3 tests added (sweep, daily checklist, audit log entry, commission ledger lifecycle, pricing edit, cleaner self-availability).
+- [x] README updates.
 
 ## Stage 4 — Analytics, reports, exports
 

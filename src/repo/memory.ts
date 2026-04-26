@@ -1,5 +1,6 @@
 import type {
   AgentCommissionRule,
+  AuditLogEntry,
   Booking,
   BookingHold,
   Building,
@@ -8,6 +9,7 @@ import type {
   CleaningCrewProfile,
   CleaningJob,
   CleaningRating,
+  CommissionLedgerEntry,
   Discount,
   Guest,
   Id,
@@ -40,6 +42,8 @@ export interface Repository {
   cleaningJobs: Map<Id, CleaningJob>;
   cleaningRatings: CleaningRating[];
   cancellationRequests: Map<Id, CancellationRequest>;
+  auditLog: AuditLogEntry[];
+  commissionLedger: Map<Id, CommissionLedgerEntry>;
 
   bookingNumberCounter: { value: number };
 }
@@ -65,6 +69,8 @@ export function createRepository(): Repository {
     cleaningJobs: new Map(),
     cleaningRatings: [],
     cancellationRequests: new Map(),
+    auditLog: [],
+    commissionLedger: new Map(),
     bookingNumberCounter: { value: 0 },
   };
 }

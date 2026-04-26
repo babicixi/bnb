@@ -11,6 +11,7 @@ import {
 import { nextId, type Repository } from "../../repo/memory.js";
 import { requireRole, type RequestWithUser } from "../middleware/auth.js";
 import { notify } from "../../services/notifications.js";
+import { parseVietnamLocal } from "../parseTime.js";
 
 export function mountCleaningRoutes(app: Express, repo: Repository): void {
   const router = Router();
@@ -181,6 +182,62 @@ export function mountCleaningRoutes(app: Express, repo: Repository): void {
     }
     addCleaningPhoto({ job, user: r.currentUser!, photoUrl: url });
     res.redirect(`/cleaning/${job.id}`);
+  });
+
+  router.get("/availability/me", (req, res) => {
+    const user = (req as RequestWithUser).currentUser!;
+    if (user.role !== "cleaning_crew") {
+      res.status(403).render("error", { title: "Forbidden", message: "" });
+      return;
+    }
+    const slots = repo.cleaningAvailability
+      .filter((a) => a.cleaningCrewUserId === user.id)
+      .sort((a, b) => a.availableFrom.getTime() - b.availableFrom.getTime())
+      .slice(0, 60);
+    res.render("cleaning/availability", { title: "My availability", slots });
+  });
+
+  router.post("/availability/me", (req, res) => {
+    const user = (req as RequestWithUser).currentUser!;
+    if (user.role !== "cleaning_crew") {
+      res.status(403).render("error", { title: "Forbidden", message: "" });
+      return;
+    }
+    const from = parseVietnamLocal(String(req.body.availableFrom ?? ""));
+    const until = parseVietnamLocal(String(req.body.availableUntil ?? ""));
+    if (
+      Number.isNaN(from.getTime()) ||
+      Number.isNaN(until.getTime()) ||
+      until <= from
+    ) {
+      res
+        .status(400)
+        .render("error", { title: "Bad availability window", message: "" });
+      return;
+    }
+    repo.cleaningAvailability.push({
+      id: nextId("availability"),
+      cleaningCrewUserId: user.id,
+      availableFrom: from,
+      availableUntil: until,
+      isActive: true,
+    });
+    res.redirect("/cleaning/availability/me");
+  });
+
+  router.post("/availability/:id/toggle", (req, res) => {
+    const user = (req as RequestWithUser).currentUser!;
+    const slot = repo.cleaningAvailability.find((a) => a.id === req.params.id);
+    if (!slot) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    if (user.role === "cleaning_crew" && slot.cleaningCrewUserId !== user.id) {
+      res.status(403).render("error", { title: "Forbidden", message: "" });
+      return;
+    }
+    slot.isActive = !slot.isActive;
+    res.redirect("/cleaning/availability/me");
   });
 
   app.use("/cleaning", router);

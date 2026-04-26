@@ -402,3 +402,174 @@ describe("cleaner permissions", () => {
     }
   });
 });
+
+describe("automation: hold expiry sweep", () => {
+  it("expireUnpaidBookings cancels pending_payment bookings past deadline", async () => {
+    const create = await request(ctx.app)
+      .post("/book/hold")
+      .type("form")
+      .send({
+        roomId: "room-2",
+        bookingType: "day",
+        ...slot(),
+        guestName: "Sweep Guest",
+        guestPhone: "+84121212121",
+      });
+    const id = ctx.repo.bookingsByNumber.get(
+      create.headers.location!.split("/").pop()!,
+    )!;
+    const booking = ctx.repo.bookings.get(id)!;
+    booking.paymentDeadlineAt = new Date(Date.now() - 1000);
+
+    const { runOperationalSweep } =
+      await import("../src/services/automation.js");
+    const result = runOperationalSweep({
+      holds: ctx.repo.holds,
+      bookings: ctx.repo.bookings.values(),
+    });
+    expect(result.cancelledBookings.some((b) => b.id === id)).toBe(true);
+    expect(ctx.repo.bookings.get(id)!.status).toBe("cancelled");
+  });
+});
+
+describe("daily checklist", () => {
+  it("includes today check-ins and pending refunds", async () => {
+    const { computeDailyChecklist } =
+      await import("../src/services/automation.js");
+    const c = computeDailyChecklist({
+      bookings: ctx.repo.bookings.values(),
+      cleaningJobs: ctx.repo.cleaningJobs.values(),
+    });
+    expect(typeof c.date).toBe("string");
+    expect(Array.isArray(c.todayCheckIns)).toBe(true);
+    expect(Array.isArray(c.pendingRefunds)).toBe(true);
+  });
+});
+
+describe("audit log + commission ledger", () => {
+  it("admin booking edit writes an audit entry", async () => {
+    const s = slot();
+    const create = await request(ctx.app)
+      .post("/book/hold")
+      .type("form")
+      .send({
+        roomId: "room-3",
+        bookingType: "multi_day",
+        checkInAt: s.checkInAt,
+        checkOutAt: vietnamIso(s.day + 1, 11),
+        guestName: "Audit Guest",
+        guestPhone: "+84131313131",
+      });
+    const id = ctx.repo.bookingsByNumber.get(
+      create.headers.location!.split("/").pop()!,
+    )!;
+
+    const admin = await loginAs("admin");
+    await admin
+      .post(`/admin/bookings/${id}/edit`)
+      .type("form")
+      .send({
+        checkInAt: ctx.repo.bookings.get(id)!.checkInAt.toISOString(),
+        checkOutAt: vietnamIso(s.day + 2, 11),
+      });
+
+    const matching = ctx.repo.auditLog.filter(
+      (e) => e.action === "booking.edit" && e.entityId === id,
+    );
+    expect(matching.length).toBeGreaterThan(0);
+  });
+
+  it("agent booking confirmation creates a pending commission ledger entry", async () => {
+    const agent = await loginAs("sales_agent", "agent1@example.com");
+    const create = await agent
+      .post("/agent/new")
+      .type("form")
+      .send({
+        roomId: "room-2",
+        bookingType: "day",
+        ...slot(),
+        guestName: "Ledger Guest",
+        guestPhone: "+84141414141",
+      });
+    const id = ctx.repo.bookingsByNumber.get(
+      create.headers.location!.split("/").pop()!,
+    )!;
+    const fakePng = Buffer.from("89504e470d0a1a0a", "hex");
+    await request(ctx.app)
+      .post(`/book/${ctx.repo.bookings.get(id)!.bookingNumber}/upload-proof`)
+      .attach("screenshot", fakePng, {
+        filename: "p.png",
+        contentType: "image/png",
+      });
+    const ledger = Array.from(ctx.repo.commissionLedger.values()).filter(
+      (l) => l.bookingId === id,
+    );
+    expect(ledger.length).toBe(1);
+    expect(ledger[0]!.status).toBe("pending");
+    expect(ledger[0]!.amountVnd).toBeGreaterThan(0);
+
+    // Admin approves, marks paid
+    const admin = await loginAs("admin");
+    const approveRes = await admin.post(
+      `/admin/commissions/${ledger[0]!.id}/approve`,
+    );
+    expect(approveRes.status).toBe(302);
+    expect(ctx.repo.commissionLedger.get(ledger[0]!.id)!.status).toBe(
+      "approved",
+    );
+    const paidRes = await admin.post(
+      `/admin/commissions/${ledger[0]!.id}/paid`,
+    );
+    expect(paidRes.status).toBe(302);
+    expect(ctx.repo.commissionLedger.get(ledger[0]!.id)!.status).toBe("paid");
+  });
+});
+
+describe("admin pricing edit", () => {
+  it("single-rate edit updates the rate and writes audit entry", async () => {
+    const admin = await loginAs("admin");
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await admin.post("/admin/pricing/edit").type("form").send({
+      roomId: "room-1",
+      rateDate: today,
+      dayRateVnd: 9999999,
+      hourlyRateVnd: 1234,
+    });
+    expect(res.status).toBe(302);
+    const rate = ctx.repo.rates.find(
+      (r) => r.roomId === "room-1" && r.rateDate === today,
+    )!;
+    expect(rate.dayRateVnd).toBe(9999999);
+    expect(
+      ctx.repo.auditLog.some(
+        (e) => e.action === "pricing.edit" && e.entityId === `room-1@${today}`,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("cleaner availability self-management", () => {
+  it("cleaner can add and toggle their own availability window", async () => {
+    const cleaner = await loginAs("cleaning_crew", "cleaner1@example.com");
+    const before = ctx.repo.cleaningAvailability.length;
+    const newSlot = slot();
+    const add = await cleaner
+      .post("/cleaning/availability/me")
+      .type("form")
+      .send({
+        availableFrom: newSlot.checkInAt,
+        availableUntil: newSlot.checkOutAt,
+      });
+    expect(add.status).toBe(302);
+    expect(ctx.repo.cleaningAvailability.length).toBe(before + 1);
+    const created =
+      ctx.repo.cleaningAvailability[ctx.repo.cleaningAvailability.length - 1]!;
+    expect(created.cleaningCrewUserId).toBe("cleaner-1");
+    expect(created.isActive).toBe(true);
+    const toggle = await cleaner.post(
+      `/cleaning/availability/${created.id}/toggle`,
+    );
+    expect(toggle.status).toBe(302);
+    expect(created.isActive).toBe(false);
+  });
+});

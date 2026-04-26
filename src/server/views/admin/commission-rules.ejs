@@ -1,0 +1,47 @@
+<%- include('../_header') %>
+<h1>Commission rules</h1>
+<p><a href="/admin">← Dashboard</a></p>
+<table>
+  <thead><tr><th>Agent</th><th>Type</th><th>Value</th><th>Active</th><th>Validity</th><th></th></tr></thead>
+  <tbody>
+    <% if (rules.length === 0) { %><tr><td colspan="6" class="muted">No rules.</td></tr><% } %>
+    <% rules.forEach(function(r){ %>
+      <tr>
+        <td><code><%= r.salesAgentId %></code></td>
+        <td><%= r.commissionType %></td>
+        <td><%= r.commissionType === 'percentage' ? r.value + '%' : formatVnd(r.value) %></td>
+        <td><%= r.isActive ? 'Yes' : 'No' %></td>
+        <td><%= r.validFrom || '—' %> → <%= r.validUntil || '—' %></td>
+        <td>
+          <form method="post" action="/admin/commission-rules/<%= r.id %>/toggle" style="display:inline">
+            <button type="submit" class="secondary"><%= r.isActive ? 'Deactivate' : 'Activate' %></button>
+          </form>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<div class="card">
+  <h2>Add a rule</h2>
+  <form method="post" action="/admin/commission-rules">
+    <label>Sales agent</label>
+    <select name="salesAgentId">
+      <% agents.forEach(function(a){ %>
+        <option value="<%= a.id %>"><%= a.fullName %></option>
+      <% }) %>
+    </select>
+    <label>Type</label>
+    <select name="commissionType">
+      <option value="percentage">Percentage of net</option>
+      <option value="fixed">Fixed (₫) per booking</option>
+    </select>
+    <label>Value</label>
+    <input type="number" name="value" min="0" step="any" required />
+    <label>Valid from</label><input type="date" name="validFrom" />
+    <label>Valid until</label><input type="date" name="validUntil" />
+    <p><label><input type="checkbox" name="isActive" value="1" checked /> Active</label></p>
+    <p><button type="submit">Create</button></p>
+  </form>
+</div>
+<%- include('../_footer') %>

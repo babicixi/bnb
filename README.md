@@ -225,6 +225,29 @@ Server-side enforcement via `requireRole` middleware mounted on each role's rout
 
 Stage 2 uses an in-memory repository (`src/repo/memory.ts`) seeded at boot (`src/repo/seed.ts`). `migrations/0001_initial_schema.sql` + `migrations/0002_booking_notes_and_source.sql` are the deployment-target Postgres schema. Switching to Postgres later is a matter of swapping the repository implementation behind the same shape — `src/services/` does not change.
 
+## Stage 3 — Admin operations & automation
+
+The admin area now includes:
+
+- **`/admin/today`** — Today's operations dashboard: today's check-ins, today's check-outs, pending payment / proof issues, pending extra payments, pending refunds, pending cleaning jobs for today, and any unassigned cleaning jobs.
+- **`/admin/pricing`** — per-room daily rate table for the next 60 days with single-row edit, a bulk edit form (date range, optional weekdays-only), and a copy-from-another-room action. Every change is audited.
+- **`/admin/discounts`** — discount CRUD (create + activate/deactivate) with global vs agent-specific scope and validity dates.
+- **`/admin/commission-rules`** — agent commission rule CRUD (percentage of net or fixed per booking), validity window, activation toggle.
+- **`/admin/commissions`** — commission ledger. Each confirmed booking with a non-zero commission auto-creates a `pending` ledger entry. Admin/manager can `approve` → `paid`, or `void`. Paid entries are immutable.
+- **`/admin/minibar`** — minibar item CRUD with activation toggle.
+- **`/admin/audit`** — last 200 audit entries (booking edits, cancellations, proof invalidation, cleaner reassignment, pricing changes, discount/commission/minibar changes, commission ledger transitions). Each entry shows actor, role, action, entity, notes, and a before/after diff where applicable.
+
+Cleaning crew get **`/cleaning/availability/me`** to add and toggle their own availability windows.
+
+### Operational automation
+
+The Express factory (`createApp`) accepts `startSweepTimer: true` and `sweepIntervalMs` (default 60s). The sweep:
+
+- expires holds whose `held_until` has passed (`expireOldHolds`)
+- cancels `pending_payment` bookings whose `paymentDeadlineAt` has passed (`expireUnpaidBookings`)
+
+The pure-function helpers `runOperationalSweep` and `computeDailyChecklist` live in `src/services/automation.ts` so they can be invoked from a real cron job (or SQL-backed scheduler) once persistence lands.
+
 ### Known limitations
 
 - No real persistence (in-memory only). Restart loses bookings.

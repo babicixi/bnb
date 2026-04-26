@@ -13,6 +13,7 @@ import { mountBookingRoutes } from "./routes/booking.js";
 import { mountAdminRoutes } from "./routes/admin.js";
 import { mountAgentRoutes } from "./routes/agent.js";
 import { mountCleaningRoutes } from "./routes/cleaning.js";
+import { runOperationalSweep } from "../services/automation.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..", "..");
@@ -21,6 +22,8 @@ export interface CreateAppOptions {
   repository?: Repository;
   sessionSecret?: string;
   uploadsDir?: string;
+  startSweepTimer?: boolean;
+  sweepIntervalMs?: number;
 }
 
 export function createApp(opts: CreateAppOptions = {}): {
@@ -28,6 +31,7 @@ export function createApp(opts: CreateAppOptions = {}): {
   repo: Repository;
   uploadsDir: string;
   demoCredentials: ReturnType<typeof seedRepository>;
+  sweepTimer?: NodeJS.Timeout;
 } {
   const repo = opts.repository ?? createRepository();
   const demoCredentials = seedRepository(repo);
@@ -65,5 +69,17 @@ export function createApp(opts: CreateAppOptions = {}): {
       .render("error", { title: "Not found", message: "Page not found." });
   });
 
-  return { app, repo, uploadsDir, demoCredentials };
+  let sweepTimer: NodeJS.Timeout | undefined;
+  if (opts.startSweepTimer) {
+    const interval = opts.sweepIntervalMs ?? 60_000;
+    sweepTimer = setInterval(() => {
+      runOperationalSweep({
+        holds: repo.holds,
+        bookings: repo.bookings.values(),
+      });
+    }, interval);
+    sweepTimer.unref?.();
+  }
+
+  return { app, repo, uploadsDir, demoCredentials, sweepTimer };
 }

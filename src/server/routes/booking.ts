@@ -10,6 +10,7 @@ import {
   createBookingFromHold,
   createHold,
   expireOldHolds,
+  recordPendingCommission,
   uploadPaymentProof,
 } from "../../index.js";
 import { parseVietnamLocal } from "../parseTime.js";
@@ -270,6 +271,14 @@ export function mountBookingRoutes(
         applyConfirmationSideEffects({
           booking,
           commissionRules: repo.commissionRules,
+        });
+      }
+      if (booking.salesAgentId && booking.calculatedCommissionVnd > 0) {
+        recordPendingCommission(repo.commissionLedger, {
+          id: nextId("commission"),
+          bookingId: booking.id,
+          salesAgentId: booking.salesAgentId,
+          amountVnd: booking.calculatedCommissionVnd,
         });
       }
       notify("payment_proof_uploaded", { bookingId: booking.id });

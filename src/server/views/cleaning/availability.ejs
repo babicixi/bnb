@@ -1,0 +1,34 @@
+<%- include('../_header') %>
+<h1>My availability</h1>
+<p><a href="/cleaning">← Jobs</a></p>
+
+<div class="card">
+  <h2>Add a window</h2>
+  <form method="post" action="/cleaning/availability/me">
+    <label>Available from (Vietnam time)</label>
+    <input type="datetime-local" name="availableFrom" required />
+    <label>Available until</label>
+    <input type="datetime-local" name="availableUntil" required />
+    <p><button type="submit">Add</button></p>
+  </form>
+</div>
+
+<table>
+  <thead><tr><th>From</th><th>Until</th><th>Active</th><th></th></tr></thead>
+  <tbody>
+    <% if (slots.length === 0) { %><tr><td colspan="4" class="muted">No availability windows yet.</td></tr><% } %>
+    <% slots.forEach(function(s){ %>
+      <tr>
+        <td><%= formatDateTime(s.availableFrom) %></td>
+        <td><%= formatDateTime(s.availableUntil) %></td>
+        <td><%= s.isActive ? 'Yes' : 'No' %></td>
+        <td>
+          <form method="post" action="/cleaning/availability/<%= s.id %>/toggle" style="display:inline">
+            <button type="submit" class="secondary"><%= s.isActive ? 'Disable' : 'Enable' %></button>
+          </form>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('../_footer') %>

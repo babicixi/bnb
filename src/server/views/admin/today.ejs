@@ -1,0 +1,56 @@
+<%- include('../_header') %>
+<h1>Today (<%= checklist.date %>)</h1>
+<p><a class="btn secondary" href="/admin">← All bookings</a></p>
+
+<div class="grid cols-2">
+  <div class="card">
+    <h2>Check-ins today (<%= checklist.todayCheckIns.length %>)</h2>
+    <% if (checklist.todayCheckIns.length === 0) { %><p class="muted">None.</p><% } %>
+    <% checklist.todayCheckIns.forEach(function(b){ var g = guestForBooking(b); var r = roomForBooking(b); %>
+      <p><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a> · <%= g ? g.fullName : '—' %> · <%= r ? r.name : '—' %> · <%= formatDateTime(b.checkInAt) %></p>
+    <% }) %>
+  </div>
+  <div class="card">
+    <h2>Check-outs today (<%= checklist.todayCheckOuts.length %>)</h2>
+    <% if (checklist.todayCheckOuts.length === 0) { %><p class="muted">None.</p><% } %>
+    <% checklist.todayCheckOuts.forEach(function(b){ var g = guestForBooking(b); var r = roomForBooking(b); %>
+      <p><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a> · <%= g ? g.fullName : '—' %> · <%= r ? r.name : '—' %> · <%= formatDateTime(b.checkOutAt) %></p>
+    <% }) %>
+  </div>
+  <div class="card">
+    <h2>Pending payment / proof issues (<%= checklist.pendingPayment.length %>)</h2>
+    <% checklist.pendingPayment.forEach(function(b){ %>
+      <p><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a> · <%= b.paymentStatus %></p>
+    <% }) %>
+    <% if (checklist.pendingPayment.length === 0) { %><p class="muted">None.</p><% } %>
+  </div>
+  <div class="card">
+    <h2>Pending extra payments (<%= checklist.pendingExtraPayment.length %>)</h2>
+    <% checklist.pendingExtraPayment.forEach(function(b){ %>
+      <p><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a> · <%= formatVnd(b.amountDueVnd) %></p>
+    <% }) %>
+    <% if (checklist.pendingExtraPayment.length === 0) { %><p class="muted">None.</p><% } %>
+  </div>
+  <div class="card">
+    <h2>Pending refunds (<%= checklist.pendingRefunds.length %>)</h2>
+    <% checklist.pendingRefunds.forEach(function(b){ %>
+      <p><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a> · <%= formatVnd(b.refundDueVnd) %></p>
+    <% }) %>
+    <% if (checklist.pendingRefunds.length === 0) { %><p class="muted">None.</p><% } %>
+  </div>
+  <div class="card">
+    <h2>Cleaning jobs today (<%= checklist.pendingCleaningJobs.length %>)</h2>
+    <% checklist.pendingCleaningJobs.forEach(function(j){ var b = bookingForJob(j); var r = roomForJob(j); %>
+      <p><%= r ? r.name : '—' %> · <%= formatDateTime(j.windowStartAt) %> · <span class="badge"><%= j.status %></span> · <%= b ? b.bookingNumber : '—' %></p>
+    <% }) %>
+    <% if (checklist.pendingCleaningJobs.length === 0) { %><p class="muted">None.</p><% } %>
+  </div>
+  <div class="card">
+    <h2>Unassigned cleaning jobs (<%= checklist.unassignedCleaningJobs.length %>)</h2>
+    <% checklist.unassignedCleaningJobs.forEach(function(j){ var b = bookingForJob(j); var r = roomForJob(j); %>
+      <p><%= r ? r.name : '—' %> · <%= formatDateTime(j.windowStartAt) %> · <%= b ? b.bookingNumber : '—' %></p>
+    <% }) %>
+    <% if (checklist.unassignedCleaningJobs.length === 0) { %><p class="muted">None.</p><% } %>
+  </div>
+</div>
+<%- include('../_footer') %>

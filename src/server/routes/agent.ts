@@ -8,6 +8,7 @@ import {
   createBookingFromHold,
   createHold,
   expireOldHolds,
+  recordPendingCommission,
   requestCancellation,
   bookingGuestViewForUser,
 } from "../../index.js";
@@ -126,12 +127,10 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
         salesAgentId: agent.id,
       });
     } catch (err) {
-      res
-        .status(400)
-        .render("error", {
-          title: "Invalid time",
-          message: (err as Error).message,
-        });
+      res.status(400).render("error", {
+        title: "Invalid time",
+        message: (err as Error).message,
+      });
       return;
     }
 
@@ -252,6 +251,14 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
       applyConfirmationSideEffects({
         booking,
         commissionRules: repo.commissionRules,
+      });
+    }
+    if (booking.salesAgentId && booking.calculatedCommissionVnd > 0) {
+      recordPendingCommission(repo.commissionLedger, {
+        id: nextId("commission"),
+        bookingId: booking.id,
+        salesAgentId: booking.salesAgentId,
+        amountVnd: booking.calculatedCommissionVnd,
       });
     }
     notify("booking_confirmed", {

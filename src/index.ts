@@ -11,3 +11,6 @@ export * from "./services/cleaning.js";
 export * from "./services/lifecycle.js";
 export * from "./services/permissions.js";
 export * from "./services/notifications.js";
+export * from "./services/automation.js";
+export * from "./services/audit.js";
+export * from "./services/commissionLedger.js";

@@ -11,7 +11,11 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 const port = Number(process.env.PORT ?? 3000);
 const sessionSecret = process.env.SESSION_SECRET ?? "dev-secret-change-me";
 
-const { app, demoCredentials } = createApp({ uploadsDir, sessionSecret });
+const { app, demoCredentials } = createApp({
+  uploadsDir,
+  sessionSecret,
+  startSweepTimer: true,
+});
 
 app.listen(port, () => {
   console.log(`▶ booking app listening on http://localhost:${port}`);

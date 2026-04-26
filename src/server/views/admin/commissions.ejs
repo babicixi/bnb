@@ -1,0 +1,36 @@
+<%- include('../_header') %>
+<h1>Commission ledger</h1>
+<p><a href="/admin">← Dashboard</a></p>
+<table>
+  <thead><tr><th>Created</th><th>Agent</th><th>Booking</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+  <tbody>
+    <% if (entries.length === 0) { %><tr><td colspan="6" class="muted">No commission entries yet.</td></tr><% } %>
+    <% entries.forEach(function(e){ var a = agents.get(e.salesAgentId); var b = bookingForEntry(e); %>
+      <tr>
+        <td><%= formatDateTime(e.createdAt) %></td>
+        <td><%= a ? a.fullName : e.salesAgentId %></td>
+        <td><% if (b) { %><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a><% } else { %>—<% } %></td>
+        <td><%= formatVnd(e.amountVnd) %></td>
+        <td><span class="badge"><%= e.status %></span><% if (e.paidAt) { %> · paid <%= formatDateTime(e.paidAt) %><% } %></td>
+        <td>
+          <% if (e.status === 'pending') { %>
+            <form method="post" action="/admin/commissions/<%= e.id %>/approve" style="display:inline">
+              <button type="submit" class="secondary">Approve</button>
+            </form>
+            <form method="post" action="/admin/commissions/<%= e.id %>/void" style="display:inline">
+              <button type="submit" class="secondary">Void</button>
+            </form>
+          <% } else if (e.status === 'approved') { %>
+            <form method="post" action="/admin/commissions/<%= e.id %>/paid" style="display:inline">
+              <button type="submit">Mark paid</button>
+            </form>
+            <form method="post" action="/admin/commissions/<%= e.id %>/void" style="display:inline">
+              <button type="submit" class="secondary">Void</button>
+            </form>
+          <% } %>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('../_footer') %>

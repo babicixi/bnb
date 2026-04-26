@@ -1,0 +1,27 @@
+<%- include('../_header') %>
+<h1>Audit log</h1>
+<p><a href="/admin">← Dashboard</a></p>
+<table>
+  <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Notes</th><th>Diff</th></tr></thead>
+  <tbody>
+    <% if (entries.length === 0) { %><tr><td colspan="6" class="muted">No audit entries yet.</td></tr><% } %>
+    <% entries.forEach(function(e){ var u = userById(e.actorUserId); %>
+      <tr>
+        <td><%= formatDateTime(e.createdAt) %></td>
+        <td><%= u ? u.fullName : (e.actorUserId || '—') %> <span class="muted-small">(<%= e.actorRole || '—' %>)</span></td>
+        <td><code><%= e.action %></code></td>
+        <td><%= e.entityType %>:<%= e.entityId %></td>
+        <td><%= e.notes || '' %></td>
+        <td>
+          <% if (e.before || e.after) { %>
+            <details><summary>show</summary>
+              <% if (e.before) { %><pre>before: <%= JSON.stringify(e.before, null, 2) %></pre><% } %>
+              <% if (e.after) { %><pre>after:  <%= JSON.stringify(e.after, null, 2) %></pre><% } %>
+            </details>
+          <% } %>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('../_footer') %>

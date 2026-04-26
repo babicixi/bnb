@@ -1,0 +1,57 @@
+<%- include('../_header') %>
+<h1>Discounts</h1>
+<p><a href="/admin">← Dashboard</a></p>
+<table>
+  <thead><tr><th>Name</th><th>Scope</th><th>Type</th><th>Value</th><th>Active</th><th>Validity</th><th></th></tr></thead>
+  <tbody>
+    <% if (discounts.length === 0) { %><tr><td colspan="7" class="muted">No discounts.</td></tr><% } %>
+    <% discounts.forEach(function(d){ %>
+      <tr>
+        <td><%= d.name %></td>
+        <td><%= d.scope %><% if (d.scope === 'agent_specific') { %> · <code><%= d.salesAgentId %></code><% } %></td>
+        <td><%= d.discountType %></td>
+        <td><%= d.discountType === 'percentage' ? d.value + '%' : formatVnd(d.value) %></td>
+        <td><%= d.isActive ? 'Yes' : 'No' %></td>
+        <td><%= d.validFrom || '—' %> → <%= d.validUntil || '—' %></td>
+        <td>
+          <form method="post" action="/admin/discounts/<%= d.id %>/toggle" style="display:inline">
+            <button type="submit" class="secondary"><%= d.isActive ? 'Deactivate' : 'Activate' %></button>
+          </form>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<div class="card">
+  <h2>Add a discount</h2>
+  <form method="post" action="/admin/discounts">
+    <label>Name</label><input name="name" required />
+    <label>Scope</label>
+    <select name="scope">
+      <option value="global">Global</option>
+      <option value="agent_specific">Agent-specific</option>
+    </select>
+    <label>If agent-specific, choose agent</label>
+    <select name="salesAgentId">
+      <option value="">—</option>
+      <% agents.forEach(function(a){ %>
+        <option value="<%= a.id %>"><%= a.fullName %></option>
+      <% }) %>
+    </select>
+    <label>Type</label>
+    <select name="discountType">
+      <option value="percentage">Percentage</option>
+      <option value="fixed">Fixed (₫)</option>
+    </select>
+    <label>Value</label>
+    <input type="number" name="value" min="0" step="any" required />
+    <label>Valid from (YYYY-MM-DD, optional)</label>
+    <input type="date" name="validFrom" />
+    <label>Valid until (YYYY-MM-DD, optional)</label>
+    <input type="date" name="validUntil" />
+    <p><label><input type="checkbox" name="isActive" value="1" checked /> Active</label></p>
+    <p><button type="submit">Create</button></p>
+  </form>
+</div>
+<%- include('../_footer') %>

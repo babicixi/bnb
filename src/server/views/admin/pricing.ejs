@@ -1,0 +1,80 @@
+<%- include('../_header') %>
+<h1>Pricing</h1>
+<p><a href="/admin">← Dashboard</a></p>
+<% if (flash) { %><p class="success">Saved (<%= flash %>).</p><% } %>
+
+<form method="get" action="/admin/pricing" class="card">
+  <label>Room</label>
+  <select name="roomId" onchange="this.form.submit()">
+    <% rooms.forEach(function(r){ %>
+      <option value="<%= r.id %>" <%= room && room.id === r.id ? 'selected' : '' %>><%= r.name %></option>
+    <% }) %>
+  </select>
+</form>
+
+<% if (room) { %>
+<div class="card">
+  <h2>Bulk edit (<%= room.name %>)</h2>
+  <form method="post" action="/admin/pricing/bulk">
+    <input type="hidden" name="roomId" value="<%= room.id %>" />
+    <div class="grid cols-2">
+      <div>
+        <label>From date</label><input type="date" name="fromDate" required />
+      </div>
+      <div>
+        <label>To date</label><input type="date" name="toDate" required />
+      </div>
+      <div>
+        <label>Day rate (₫)</label>
+        <input type="number" name="dayRateVnd" min="0" required />
+      </div>
+      <div>
+        <label>Hourly rate (₫)</label>
+        <input type="number" name="hourlyRateVnd" min="0" required />
+      </div>
+    </div>
+    <p><label><input type="checkbox" name="weekdayOnly" value="1" /> Weekdays only</label></p>
+    <p><button type="submit">Apply bulk</button></p>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Copy from another room</h2>
+  <form method="post" action="/admin/pricing/copy">
+    <input type="hidden" name="toRoomId" value="<%= room.id %>" />
+    <label>Copy rates from</label>
+    <select name="fromRoomId">
+      <% rooms.forEach(function(r){ if (r.id !== room.id) { %>
+        <option value="<%= r.id %>"><%= r.name %></option>
+      <% } }) %>
+    </select>
+    <p><button type="submit" class="secondary">Copy &amp; replace</button></p>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Daily rates (next 60 days)</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Day rate</th><th>Hourly rate</th><th>Edit</th></tr></thead>
+    <tbody>
+      <% rates.forEach(function(r){ %>
+        <tr>
+          <td><%= r.rateDate %></td>
+          <td><%= formatVnd(r.dayRateVnd) %></td>
+          <td><%= formatVnd(r.hourlyRateVnd) %></td>
+          <td>
+            <form method="post" action="/admin/pricing/edit" style="display:flex; gap:0.5rem; align-items:center;">
+              <input type="hidden" name="roomId" value="<%= room.id %>" />
+              <input type="hidden" name="rateDate" value="<%= r.rateDate %>" />
+              <input type="number" name="dayRateVnd" value="<%= r.dayRateVnd %>" min="0" style="max-width:120px" />
+              <input type="number" name="hourlyRateVnd" value="<%= r.hourlyRateVnd %>" min="0" style="max-width:120px" />
+              <button type="submit" class="secondary">Save</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<% } %>
+<%- include('../_footer') %>
