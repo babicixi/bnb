@@ -41,6 +41,14 @@ Primary statuses:
 
 When a guest selects a room and time, `createHold` creates a 15-minute hold. Active holds block everyone, including admins. `expireOldHolds` marks expired holds so they no longer block availability.
 
+`createBookingFromHold` converts an active hold into a `Booking` (status `pending_payment`, payment status `pending`) and a `Payment` stub (method `bank_transfer`). The hold is marked expired since the booking itself now blocks the slot.
+
+Operational lifecycle helpers (admin/manager only):
+
+- `checkInGuest(booking, by)` — `confirmed` → `checked_in`.
+- `checkOutGuest(booking, by, cleaning?)` — `checked_in` → `checked_out`; optionally auto-assigns a cleaning job and flips status to `cleaning_assigned`.
+- `closeBooking(booking, by)` — `cleaned` / `checked_out` / `refund_pending` / `extra_payment_required` → `closed`.
+
 `checkAvailability` blocks a requested window when it overlaps:
 
 - an active hold
@@ -54,8 +62,8 @@ The initial payment method is static bank transfer.
 1. Guest books and receives a booking number.
 2. Guest uploads a bank transfer screenshot.
 3. `uploadPaymentProof` creates the proof record.
-4. `confirmBookingAfterPaymentProof` automatically sets the booking to `confirmed`.
-5. Payment status becomes `proof_uploaded`.
+4. `confirmBookingAfterPaymentProof` automatically sets the booking to `confirmed`, sets payment status to `proof_uploaded`, and marks `amountPaidVnd` as the full collectable amount.
+5. Optionally, `applyConfirmationSideEffects({ booking, commissionRules, cleaning? })` populates `calculatedCommissionVnd` and creates the cleaning job up-front (without flipping booking status) so the schedule is set as soon as the stay is confirmed.
 
 Admin or manager can later call `markPaymentProofInvalid`, which moves the booking back to `pending_payment` and payment status to `proof_invalid`.
 
