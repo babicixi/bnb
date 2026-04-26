@@ -1,0 +1,18 @@
+<%- include('_header') %>
+<h1><%= t('site.tagline') %></h1>
+<% buildings.forEach(function(b) { %>
+  <section>
+    <h2><%= b.name %> <span class="muted-small"><%= b.address %>, <%= b.city %></span></h2>
+    <div class="grid cols-2">
+      <% b.rooms.forEach(function(r) { %>
+        <div class="card">
+          <h3><%= r.name %></h3>
+          <p class="muted">Room <%= r.roomNumber || '—' %> · up to <%= r.maxGuests %> guests</p>
+          <p>From <strong><%= formatVnd(r.baseDayRateVnd) %></strong> / day · <%= formatVnd(r.baseHourlyRateVnd) %> / hour</p>
+          <p><a class="btn" href="/rooms/<%= r.id %>"><%= t('rooms.book_now') %></a></p>
+        </div>
+      <% }) %>
+    </div>
+  </section>
+<% }) %>
+<%- include('_footer') %>

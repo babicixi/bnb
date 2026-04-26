@@ -1,0 +1,43 @@
+<%- include('_header') %>
+<h1><%= room.name %></h1>
+<p class="muted"><%= building && building.name %> · Room <%= room.roomNumber %> · up to <%= room.maxGuests %> guests</p>
+<p>Day rate: <strong><%= formatVnd(room.baseDayRateVnd) %></strong> · Hourly: <%= formatVnd(room.baseHourlyRateVnd) %></p>
+
+<div class="card">
+  <h2>Book this room</h2>
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+  <form method="post" action="/book/hold">
+    <input type="hidden" name="roomId" value="<%= room.id %>" />
+
+    <label><%= t('booking.type') %></label>
+    <select name="bookingType">
+      <option value="day">Day</option>
+      <option value="multi_day">Multi-day</option>
+      <option value="hourly">Hourly</option>
+    </select>
+
+    <label><%= t('booking.checkin') %> (Vietnam time)</label>
+    <input type="datetime-local" name="checkInAt" required />
+
+    <label><%= t('booking.checkout') %> (Vietnam time)</label>
+    <input type="datetime-local" name="checkOutAt" required />
+
+    <h3>Your details</h3>
+    <label><%= t('booking.guest_name') %></label>
+    <input type="text" name="guestName" required />
+    <label><%= t('booking.phone') %></label>
+    <input type="tel" name="guestPhone" required />
+    <label><%= t('booking.email') %></label>
+    <input type="email" name="guestEmail" />
+    <label><%= t('booking.notes') %></label>
+    <textarea name="notes" rows="2"></textarea>
+
+    <p class="muted-small">
+      Day &amp; multi-day: check-in after 14:00, check-out 11:00 the next/departure day.
+      Hourly past midnight converts to a day rate at 11:00 next day.
+    </p>
+
+    <p><button type="submit"><%= t('booking.confirm') %></button></p>
+  </form>
+</div>
+<%- include('_footer') %>

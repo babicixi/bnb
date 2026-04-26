@@ -1,0 +1,11 @@
+<%- include('_header') %>
+<h1><%= t('booking.confirmation') %></h1>
+<div class="card">
+  <p><strong>Booking number:</strong> <%= booking.bookingNumber %></p>
+  <p><strong>Room:</strong> <%= room && room.name %></p>
+  <p><strong>Check-in:</strong> <%= formatDateTime(booking.checkInAt) %></p>
+  <p><strong>Check-out:</strong> <%= formatDateTime(booking.checkOutAt) %></p>
+  <p><strong>Guest:</strong> <%= guest && guest.fullName %> · <%= guest && guest.phone %></p>
+  <p>If you need any changes or to cancel, please contact us with your booking number.</p>
+</div>
+<%- include('_footer') %>

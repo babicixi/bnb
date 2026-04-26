@@ -1,0 +1,89 @@
+<%- include('../_header') %>
+<h1>Admin dashboard</h1>
+<p>
+  <a class="btn secondary" href="/admin/refunds">Pending refunds</a>
+  <a class="btn secondary" href="/admin/extras">Pending extras</a>
+</p>
+<form method="get" action="/admin" class="card">
+  <div class="grid cols-3">
+    <div>
+      <label>From</label>
+      <input type="date" name="from" value="<%= filters.from || '' %>" />
+    </div>
+    <div>
+      <label>To</label>
+      <input type="date" name="to" value="<%= filters.to || '' %>" />
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="status">
+        <option value="">Any</option>
+        <% ['held','pending_payment','confirmed','checked_in','checked_out','cleaning_assigned','cleaning_in_progress','cleaned','extra_payment_required','refund_pending','cancellation_requested','cancelled','closed'].forEach(function(s){ %>
+          <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>><%= s %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div>
+      <label>Payment status</label>
+      <select name="paymentStatus">
+        <option value="">Any</option>
+        <% ['pending','proof_uploaded','proof_invalid','verified','refunded','cancelled'].forEach(function(s){ %>
+          <option value="<%= s %>" <%= filters.paymentStatus === s ? 'selected' : '' %>><%= s %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div>
+      <label>Building</label>
+      <select name="buildingId">
+        <option value="">Any</option>
+        <% buildings.forEach(function(b){ %>
+          <option value="<%= b.id %>" <%= filters.buildingId === b.id ? 'selected' : '' %>><%= b.name %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div>
+      <label>Room</label>
+      <select name="roomId">
+        <option value="">Any</option>
+        <% rooms.forEach(function(r){ %>
+          <option value="<%= r.id %>" <%= filters.roomId === r.id ? 'selected' : '' %>><%= r.name %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div>
+      <label>Sales agent</label>
+      <select name="agentId">
+        <option value="">Any</option>
+        <% agents.forEach(function(a){ %>
+          <option value="<%= a.id %>" <%= filters.agentId === a.id ? 'selected' : '' %>><%= a.fullName %></option>
+        <% }) %>
+      </select>
+    </div>
+  </div>
+  <p><button type="submit">Filter</button></p>
+</form>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>Room</th><th>Guest</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Payment</th><th>Total</th><th></th></tr>
+  </thead>
+  <tbody>
+    <% if (bookings.length === 0) { %>
+      <tr><td colspan="9" class="muted">No bookings match the filters yet.</td></tr>
+    <% } %>
+    <% bookings.forEach(function(b){ var g = guestForBooking(b); var r = roomForBooking(b); %>
+      <tr>
+        <td><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
+        <td><%= r ? r.name : '—' %></td>
+        <td><%= g ? g.fullName : '—' %></td>
+        <td><%= formatDateTime(b.checkInAt) %></td>
+        <td><%= formatDateTime(b.checkOutAt) %></td>
+        <td><span class="badge"><%= b.status %></span></td>
+        <td><span class="badge"><%= b.paymentStatus %></span></td>
+        <td><%= formatVnd(b.finalRoomChargeVnd + b.securityDepositVnd) %></td>
+        <td><a href="/admin/bookings/<%= b.id %>" class="btn secondary">Open</a></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('../_footer') %>

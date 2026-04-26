@@ -44,6 +44,7 @@ export interface User {
   email: string;
   phone?: string;
   isActive: boolean;
+  passwordHash?: string;
 }
 
 export interface Guest {
@@ -111,6 +112,11 @@ export interface Booking {
   syncStatus: SyncStatus;
   lastSyncedAt?: Date;
   cancelledAt?: Date;
+  notes?: string;
+  source?: "guest" | "agent" | "admin";
+  paymentProofUrl?: string;
+  guestSourceTag?: string;
+  paymentDeadlineAt?: Date;
 }
 
 export interface BookingHold {

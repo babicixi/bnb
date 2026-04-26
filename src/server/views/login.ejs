@@ -1,0 +1,14 @@
+<%- include('_header') %>
+<h1>Staff login</h1>
+<div class="card">
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+  <form method="post" action="/login">
+    <label>Email</label>
+    <input type="email" name="email" required autofocus />
+    <label>Password</label>
+    <input type="password" name="password" required />
+    <p><button type="submit">Sign in</button></p>
+  </form>
+  <p class="muted-small">Demo logins are printed in the server console at boot.</p>
+</div>
+<%- include('_footer') %>

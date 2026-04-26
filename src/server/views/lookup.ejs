@@ -1,0 +1,26 @@
+<%- include('_header') %>
+<h1>Find my booking</h1>
+<div class="card">
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+  <form method="post" action="/lookup">
+    <label>Booking number</label>
+    <input type="text" name="bookingNumber" required />
+    <label>Phone (as entered when booking)</label>
+    <input type="tel" name="phone" required />
+    <p><button type="submit">Look up</button></p>
+  </form>
+</div>
+<% if (booking) { %>
+  <div class="card">
+    <h2>Booking <%= booking.bookingNumber %></h2>
+    <p>Status: <span class="badge"><%= booking.status %></span></p>
+    <p>Room: <%= room && room.name %></p>
+    <p>Check-in: <%= formatDateTime(booking.checkInAt) %></p>
+    <p>Check-out: <%= formatDateTime(booking.checkOutAt) %></p>
+    <p>Amount paid: <%= formatVnd(booking.amountPaidVnd) %></p>
+    <p>Refund due: <%= formatVnd(booking.refundDueVnd) %></p>
+    <p>Extra payment due: <%= formatVnd(booking.amountDueVnd) %></p>
+    <p>Need a change? Contact us with your booking number.</p>
+  </div>
+<% } %>
+<%- include('_footer') %>

@@ -1,0 +1,63 @@
+<%- include('../_header') %>
+<h1>Cleaning job</h1>
+<p><a href="/cleaning">← Back to my jobs</a></p>
+<div class="card">
+  <p>Status: <span class="badge"><%= job.status %></span></p>
+  <p>Room: <%= room && room.name %></p>
+  <p>Window: <%= formatDateTime(job.windowStartAt) %> – <%= formatDateTime(job.windowEndAt) %></p>
+  <p>Booking: <%= booking ? booking.bookingNumber : '—' %></p>
+  <p>Fixed pay for this job: <%= formatVnd(job.fixedPayVnd) %></p>
+</div>
+
+<div class="card">
+  <h2>Status</h2>
+  <div class="flex-row">
+    <% if (job.status === 'assigned') { %>
+      <form method="post" action="/cleaning/<%= job.id %>/arrived"><button>Mark arrived</button></form>
+    <% } %>
+    <% if (job.status === 'arrived' || job.status === 'assigned') { %>
+      <form method="post" action="/cleaning/<%= job.id %>/start"><button>Start cleaning</button></form>
+    <% } %>
+    <% if (job.status === 'in_progress' || job.status === 'arrived') { %>
+      <form method="post" action="/cleaning/<%= job.id %>/complete"><button>Mark completed</button></form>
+    <% } %>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Report minibar usage</h2>
+  <form method="post" action="/cleaning/<%= job.id %>/minibar">
+    <label>Item</label>
+    <select name="itemId">
+      <% minibarItems.forEach(function(i){ %><option value="<%= i.id %>"><%= i.name %> (<%= formatVnd(i.unitPriceVnd) %>)</option><% }) %>
+    </select>
+    <label>Quantity</label>
+    <input type="number" name="quantity" min="1" value="1" />
+    <p><button type="submit">Add usage</button></p>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Report damages</h2>
+  <form method="post" action="/cleaning/<%= job.id %>/damage">
+    <label>Damage charges (₫)</label>
+    <input type="number" name="damageChargesVnd" min="0" />
+    <label>Notes</label>
+    <textarea name="notes" rows="2"></textarea>
+    <p><button type="submit" class="danger">Add damage report</button></p>
+  </form>
+  <% if (job.damageNotes) { %><p>Existing notes: <%= job.damageNotes %></p><% } %>
+</div>
+
+<div class="card">
+  <h2>Photos</h2>
+  <form method="post" action="/cleaning/<%= job.id %>/photo" class="flex-row">
+    <input type="url" name="photoUrl" placeholder="https://..." style="max-width:480px" required />
+    <button type="submit">Add URL</button>
+  </form>
+  <p class="muted-small">File-storage upload not wired — paste a URL for now.</p>
+  <% if (job.photoUrls && job.photoUrls.length) { %>
+    <ul><% job.photoUrls.forEach(function(u){ %><li><a href="<%= u %>" target="_blank"><%= u %></a></li><% }) %></ul>
+  <% } %>
+</div>
+<%- include('../_footer') %>

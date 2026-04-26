@@ -1,0 +1,102 @@
+<%- include('../_header') %>
+<h1>Booking <%= booking.bookingNumber %></h1>
+<p><a href="/admin">← Back to dashboard</a></p>
+<p>Status: <span class="badge"><%= booking.status %></span> · Payment: <span class="badge"><%= booking.paymentStatus %></span></p>
+
+<div class="grid cols-2">
+  <div class="card">
+    <h2>Stay</h2>
+    <p>Room: <%= room && room.name %></p>
+    <p>Check-in: <%= formatDateTime(booking.checkInAt) %></p>
+    <p>Check-out: <%= formatDateTime(booking.checkOutAt) %></p>
+    <p>Type: <%= booking.bookingType %></p>
+    <p>Source: <%= booking.source || '—' %></p>
+  </div>
+  <div class="card">
+    <h2>Guest</h2>
+    <p><%= guest && guest.fullName %></p>
+    <p><%= guest && guest.phone %></p>
+    <% if (guest && guest.email) { %><p><%= guest.email %></p><% } %>
+  </div>
+  <div class="card">
+    <h2>Charges</h2>
+    <p>Room: <%= formatVnd(booking.finalRoomChargeVnd) %></p>
+    <p>Discount: <%= formatVnd(booking.discountAmountVnd) %></p>
+    <p>Deposit: <%= formatVnd(booking.securityDepositVnd) %></p>
+    <p>Paid: <%= formatVnd(booking.amountPaidVnd) %></p>
+    <p>Due: <%= formatVnd(booking.amountDueVnd) %></p>
+    <p>Refund: <%= formatVnd(booking.refundDueVnd) %></p>
+    <p>Minibar: <%= formatVnd(booking.minibarChargesVnd) %></p>
+    <p>Damages: <%= formatVnd(booking.damageChargesVnd) %></p>
+    <p>Commission: <%= formatVnd(booking.calculatedCommissionVnd) %></p>
+  </div>
+  <div class="card">
+    <h2>Cleaning</h2>
+    <% if (cleaningJob) { %>
+      <p>Job <code><%= cleaningJob.id %></code></p>
+      <p>Status: <span class="badge"><%= cleaningJob.status %></span></p>
+      <p>Window: <%= formatDateTime(cleaningJob.windowStartAt) %> – <%= formatDateTime(cleaningJob.windowEndAt) %></p>
+      <p>Assigned to: <%= cleaningJob.assignedToUserId || '—' %></p>
+    <% } else { %><p class="muted">No cleaning job yet.</p><% } %>
+    <form method="post" action="/admin/bookings/<%= booking.id %>/assign-cleaner">
+      <label>Assign / reassign cleaner</label>
+      <select name="cleanerId">
+        <% cleaners.forEach(function(c){ %>
+          <option value="<%= c.userId %>"><%= c.user ? c.user.fullName : c.userId %> (jobs: <%= c.jobsCompleted %>)</option>
+        <% }) %>
+      </select>
+      <p><button type="submit">Assign</button></p>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Edit times</h2>
+  <form method="post" action="/admin/bookings/<%= booking.id %>/edit">
+    <label>Check-in</label>
+    <input type="datetime-local" name="checkInAt" value="<%= booking.checkInAt.toISOString().slice(0,16) %>" required />
+    <label>Check-out</label>
+    <input type="datetime-local" name="checkOutAt" value="<%= booking.checkOutAt.toISOString().slice(0,16) %>" required />
+    <label>Internal notes</label>
+    <textarea name="notes" rows="2"><%= booking.notes || '' %></textarea>
+    <p><button type="submit">Save</button></p>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Payment proofs</h2>
+  <% if (proofs.length === 0) { %>
+    <p class="muted">No proof uploaded yet.</p>
+  <% } else { %>
+    <% proofs.forEach(function(p){ %>
+      <div class="image-thumb">
+        <a href="<%= p.fileUrl %>" target="_blank"><img src="<%= p.fileUrl %>" alt="proof" /></a>
+        <p class="muted-small"><%= p.status %><% if (p.invalidReason) { %> — <%= p.invalidReason %><% } %></p>
+      </div>
+    <% }) %>
+    <form method="post" action="/admin/bookings/<%= booking.id %>/proof-invalid">
+      <label>Mark latest proof invalid (reason)</label>
+      <input type="text" name="reason" />
+      <p><button type="submit" class="danger">Mark invalid</button></p>
+    </form>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>Cancellation</h2>
+  <% if (cancellation) { %>
+    <p>Status: <%= cancellation.status %> · fee: <%= formatVnd(cancellation.cancellationFeeVnd) %></p>
+  <% } %>
+  <form method="post" action="/admin/bookings/<%= booking.id %>/cancel" onsubmit="return confirm('Cancel this booking?')">
+    <p><button type="submit" class="danger">Cancel booking</button></p>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Internal notes</h2>
+  <form method="post" action="/admin/bookings/<%= booking.id %>/notes">
+    <textarea name="notes" rows="3"><%= booking.notes || '' %></textarea>
+    <p><button type="submit">Save notes</button></p>
+  </form>
+</div>
+<%- include('../_footer') %>

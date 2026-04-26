@@ -1,0 +1,39 @@
+<%- include('../_header') %>
+<h1>Create booking on behalf of guest</h1>
+<div class="card">
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+  <form method="post" action="/agent/new">
+    <label>Room</label>
+    <select name="roomId" required>
+      <% rooms.forEach(function(r){ %><option value="<%= r.id %>"><%= r.name %> (<%= formatVnd(r.baseDayRateVnd) %>/day)</option><% }) %>
+    </select>
+    <label>Type</label>
+    <select name="bookingType">
+      <option value="day">Day</option>
+      <option value="multi_day">Multi-day</option>
+      <option value="hourly">Hourly</option>
+    </select>
+    <label>Check-in</label>
+    <input type="datetime-local" name="checkInAt" required />
+    <label>Check-out</label>
+    <input type="datetime-local" name="checkOutAt" required />
+
+    <h3>Guest</h3>
+    <label>Name</label><input name="guestName" required />
+    <label>Phone</label><input name="guestPhone" required />
+    <label>Email (optional)</label><input type="email" name="guestEmail" />
+
+    <label>Apply discount</label>
+    <select name="discountId">
+      <option value="">— none —</option>
+      <% discounts.forEach(function(d){ %>
+        <option value="<%= d.id %>"><%= d.name %> (<%= d.scope %>)</option>
+      <% }) %>
+    </select>
+
+    <label>Notes</label>
+    <textarea name="notes" rows="2"></textarea>
+    <p><button type="submit">Create booking + 15-min hold</button></p>
+  </form>
+</div>
+<%- include('../_footer') %>

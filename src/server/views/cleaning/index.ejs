@@ -1,0 +1,18 @@
+<%- include('../_header') %>
+<h1>Cleaning jobs</h1>
+<% if (jobs.length === 0) { %><p class="muted">Nothing assigned right now.</p><% } %>
+<table>
+  <thead><tr><th>Window</th><th>Room</th><th>Status</th><th>Booking</th><th></th></tr></thead>
+  <tbody>
+    <% jobs.forEach(function(j){ var b = bookingForJob(j); var r = roomForJob(j); %>
+      <tr>
+        <td><%= formatDateTime(j.windowStartAt) %> – <%= formatDateTime(j.windowEndAt) %></td>
+        <td><%= r ? r.name : '—' %></td>
+        <td><span class="badge"><%= j.status %></span></td>
+        <td><%= b ? b.bookingNumber : '—' %></td>
+        <td><a class="btn secondary" href="/cleaning/<%= j.id %>">Open</a></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('../_footer') %>

@@ -1,0 +1,55 @@
+<%- include('../_header') %>
+<h1>Booking <%= booking.bookingNumber %></h1>
+<p><a href="/agent">← My bookings</a></p>
+<p>Status: <span class="badge"><%= booking.status %></span></p>
+<div class="grid cols-2">
+  <div class="card">
+    <h2>Stay</h2>
+    <p>Room: <%= room && room.name %></p>
+    <p>Check-in: <%= formatDateTime(booking.checkInAt) %></p>
+    <p>Check-out: <%= formatDateTime(booking.checkOutAt) %></p>
+  </div>
+  <div class="card">
+    <h2>Guest</h2>
+    <% if (view.guest) { %>
+      <p><%= view.guest.fullName %></p>
+      <p><%= view.guest.phone %></p>
+      <% if (view.guest.email) { %><p><%= view.guest.email %></p><% } %>
+    <% } else { %>
+      <p class="muted">Guest details hidden — not your booking.</p>
+    <% } %>
+  </div>
+  <div class="card">
+    <h2>Money</h2>
+    <p>Room: <%= formatVnd(booking.finalRoomChargeVnd) %></p>
+    <p>Discount: <%= formatVnd(booking.discountAmountVnd) %></p>
+    <p>Deposit: <%= formatVnd(booking.securityDepositVnd) %></p>
+    <p>Paid: <%= formatVnd(booking.amountPaidVnd) %></p>
+    <p>Due: <%= formatVnd(booking.amountDueVnd) %></p>
+    <p>Refund: <%= formatVnd(booking.refundDueVnd) %></p>
+    <p><strong>Your commission (preview):</strong> <%= formatVnd(commission) %></p>
+  </div>
+</div>
+
+<% if (booking.status !== 'cancelled' && booking.status !== 'closed') { %>
+<div class="card">
+  <h2>Request cancellation</h2>
+  <p class="muted-small">Admin must approve. You cannot approve yourself.</p>
+  <form method="post" action="/agent/bookings/<%= booking.id %>/cancel-request">
+    <label>Reason</label>
+    <input type="text" name="reason" />
+    <p><button type="submit" class="danger">Request cancellation</button></p>
+  </form>
+</div>
+<% } %>
+
+<% if (booking.status === 'pending_payment') { %>
+<div class="card">
+  <h2>Confirm after manual payment check</h2>
+  <p class="muted-small">If the guest paid offline and you've verified, you can confirm here. Otherwise the guest will upload a screenshot from their booking page.</p>
+  <form method="post" action="/agent/bookings/<%= booking.id %>/auto-confirm">
+    <p><button type="submit">Mark paid &amp; confirm</button></p>
+  </form>
+</div>
+<% } %>
+<%- include('../_footer') %>

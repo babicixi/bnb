@@ -155,13 +155,84 @@ Install Node.js first.
 
 ```bash
 npm install
+npm run dev          # boot the web app on http://localhost:3000
+npm run start        # boot without watch
 npm run typecheck
 npm run lint
 npm test
 npm run format
 ```
 
+`npm run dev` boots the Express app at `http://localhost:3000`. The console prints six demo logins:
+
+| role            | email                    | password        | landing |
+|-----------------|--------------------------|-----------------|---------|
+| admin           | admin@example.com        | admin12345      | `/admin` |
+| manager         | manager@example.com      | manager12345    | `/admin` |
+| sales_agent     | agent1@example.com       | agent12345      | `/agent` |
+| sales_agent     | agent2@example.com       | agent12345      | `/agent` |
+| cleaning_crew   | cleaner1@example.com     | cleaner12345    | `/cleaning` |
+| cleaning_crew   | cleaner2@example.com     | cleaner12345    | `/cleaning` |
+
 Note: on Windows, installing into a Google Drive (DriveFS) path may fail because esbuild's postinstall cannot write through the DriveFS layer. The workaround used here is to install into a local copy on `C:` for verification (`robocopy` the source, `npm install` there, run scripts there), or to put `node_modules` on a junction to a local NTFS volume.
+
+## Stage 2 — End-to-end web workflow
+
+The Express app under `src/server/` exposes:
+
+### Guest flow (no login)
+
+1. `GET /` — buildings + rooms list.
+2. `GET /rooms/:id` — room detail with availability/booking form (room, type, check-in, check-out, guest name+phone, optional email/notes).
+3. `POST /book/hold` — server validates availability, creates a 15-minute hold + booking + payment record, then redirects to the booking page.
+4. `GET /book/:bookingNumber` — booking summary + bank-transfer instructions + countdown until payment deadline + screenshot upload form.
+5. `POST /book/:bookingNumber/upload-proof` — multer accepts an image, calls `uploadPaymentProof` + `applyConfirmationSideEffects` (commission + cleaning auto-assign), redirects to confirmation. After the deadline the route returns `410` and cancels the booking.
+6. `GET /book/:bookingNumber/confirmation` — final confirmation page.
+7. `GET /lookup` and `POST /lookup` — guest looks up a booking by number + matching phone.
+
+Page text is wired through a tiny `t(key)` helper at `src/server/i18n.ts`. Switch with `?locale=vi` / `?locale=en`.
+
+### Admin / manager (`/admin/*`, requires `admin` or `manager`)
+
+- Dashboard with filters (status, payment status, building, room, sales agent, date range).
+- Booking detail with edit (recalculates → `extra_payment_required` or `refund_pending`), cancel (records + approves a `cancellation_request`), mark proof invalid, internal notes, and assign/reassign cleaning crew.
+- `/admin/refunds` and `/admin/extras` shortlists.
+- `/admin/price-preview` JSON helper for inline price checks.
+
+### Sales agent (`/agent/*`, requires `sales_agent`)
+
+- Sees only own bookings; running commission total at the top.
+- New booking form with allowed discount picker (global + agent-specific).
+- Booking detail uses `bookingGuestViewForUser` so other agents' bookings render guest fields blank.
+- Request cancellation (status moves to `cancellation_requested`; admin must approve).
+
+### Cleaning crew (`/cleaning/*`, requires `cleaning_crew`/`admin`/`manager`)
+
+- Sees only assigned jobs (admin/manager see all).
+- Status transitions: `arrived` → `start` → `complete`.
+- Report minibar usage (adds to booking minibar charges) and damages (adds to job + booking damage charges).
+- Photo URL placeholder field (file storage not wired).
+
+### Permissions
+
+Server-side enforcement via `requireRole` middleware mounted on each role's router. Sales-agent ownership is checked per-booking. Cleaner job-ownership is checked in `loadJobOr404`.
+
+### Notifications
+
+`src/services/notifications.ts` exposes a Node `EventEmitter` with the events listed in the Stage 5 spec (`booking_hold_created`, `booking_confirmed`, `payment_proof_uploaded`, `payment_proof_invalid`, `cancellation_requested`, `cancellation_approved`, `cleaning_assigned`, `cleaning_started`, `cleaning_completed`, `minibar_reported`, `damage_reported`, `extra_payment_required`, `refund_pending`, `hold_expired`, …). No transport (email/SMS/Zalo) is wired — listen on the emitter to integrate later.
+
+### Persistence
+
+Stage 2 uses an in-memory repository (`src/repo/memory.ts`) seeded at boot (`src/repo/seed.ts`). `migrations/0001_initial_schema.sql` + `migrations/0002_booking_notes_and_source.sql` are the deployment-target Postgres schema. Switching to Postgres later is a matter of swapping the repository implementation behind the same shape — `src/services/` does not change.
+
+### Known limitations
+
+- No real persistence (in-memory only). Restart loses bookings.
+- No file-storage backend for uploads beyond a local `uploads/` directory; production should use S3/Supabase Storage.
+- `expireOldHolds` is invoked lazily on each `POST /book/hold` and `/agent/new`. A scheduled job (Stage 3) should sweep regularly so booked-but-unpaid windows free up automatically.
+- No email/SMS — see notification placeholders above.
+- No CSRF protection on forms (Stage 8).
+- Day-rate booking can only be extended by editing it as `multi_day` (admin would need to re-create as multi_day to extend a one-night stay; the edit route preserves the original booking type).
 
 Apply database files with your preferred PostgreSQL/Supabase migration runner:
 

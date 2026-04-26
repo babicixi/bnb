@@ -72,6 +72,7 @@ export function createBookingFromHold(
     minibarChargesVnd: 0,
     damageChargesVnd: 0,
     syncStatus: "not_synced",
+    paymentDeadlineAt: input.hold.heldUntil,
   };
 
   const payment: Payment = {

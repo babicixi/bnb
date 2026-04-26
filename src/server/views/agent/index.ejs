@@ -1,0 +1,24 @@
+<%- include('../_header') %>
+<h1>My bookings</h1>
+<p>
+  <a class="btn" href="/agent/new">+ New booking</a>
+  <span class="muted-small">· total commission earned (calculated): <strong><%= formatVnd(totalCommission) %></strong></span>
+</p>
+<table>
+  <thead><tr><th>#</th><th>Room</th><th>Guest</th><th>Check-in</th><th>Status</th><th>Commission</th><th></th></tr></thead>
+  <tbody>
+    <% if (bookings.length === 0) { %><tr><td colspan="7" class="muted">No bookings yet.</td></tr><% } %>
+    <% bookings.forEach(function(b){ var g = guestForBooking(b); var r = roomForBooking(b); %>
+      <tr>
+        <td><a href="/agent/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
+        <td><%= r ? r.name : '—' %></td>
+        <td><%= g ? g.fullName : '—' %></td>
+        <td><%= formatDateTime(b.checkInAt) %></td>
+        <td><span class="badge"><%= b.status %></span></td>
+        <td><%= formatVnd(b.calculatedCommissionVnd) %></td>
+        <td><a class="btn secondary" href="/agent/bookings/<%= b.id %>">Open</a></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('../_footer') %>

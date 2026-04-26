@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="<%= locale %>">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= title %> · <%= t('site.title') %></title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <a class="brand" href="/"><%= t('site.title') %></a>
+    <nav>
+      <a href="/"><%= t('nav.home') %></a>
+      <a href="/lookup"><%= t('nav.lookup') %></a>
+      <% if (currentUser) { %>
+        <% if (currentUser.role === 'admin' || currentUser.role === 'manager') { %>
+          <a href="/admin">Admin</a>
+        <% } %>
+        <% if (currentUser.role === 'sales_agent') { %>
+          <a href="/agent">Agent</a>
+        <% } %>
+        <% if (currentUser.role === 'cleaning_crew') { %>
+          <a href="/cleaning">Cleaning</a>
+        <% } %>
+        <span class="muted-small">· <%= currentUser.fullName %></span>
+        <form method="post" action="/logout" style="display:inline">
+          <button class="secondary" type="submit"><%= t('nav.logout') %></button>
+        </form>
+      <% } else { %>
+        <a href="/login"><%= t('nav.staff_login') %></a>
+      <% } %>
+      <span class="muted-small">·</span>
+      <a href="?locale=en">EN</a>
+      <a href="?locale=vi">VI</a>
+    </nav>
+  </header>
+  <main>

@@ -1,0 +1,71 @@
+<%- include('_header') %>
+<h1>Booking <%= booking.bookingNumber %></h1>
+
+<% function badge(status) {
+  const map = {
+    held: 'warn', pending_payment: 'warn', confirmed: 'good',
+    checked_in: 'good', checked_out: 'good', cleaning_assigned: 'warn',
+    cleaning_in_progress: 'warn', cleaned: 'good', extra_payment_required: 'warn',
+    refund_pending: 'warn', cancellation_requested: 'warn', cancelled: 'bad', closed: ''
+  };
+  return map[status] || '';
+} %>
+<p>Status: <span class="badge <%= badge(booking.status) %>"><%= booking.status %></span> · Payment: <span class="badge <%= badge(booking.paymentStatus) %>"><%= booking.paymentStatus %></span></p>
+<div class="card">
+  <h2>Stay</h2>
+  <p>Room: <%= room && room.name %></p>
+  <p><%= t('booking.checkin') %>: <%= formatDateTime(booking.checkInAt) %></p>
+  <p><%= t('booking.checkout') %>: <%= formatDateTime(booking.checkOutAt) %></p>
+  <p>Guest: <%= guest && guest.fullName %> · <%= guest && guest.phone %></p>
+</div>
+
+<div class="card">
+  <h2>Charges</h2>
+  <p>Room charge: <%= formatVnd(booking.finalRoomChargeVnd) %></p>
+  <p>Discount: <%= formatVnd(booking.discountAmountVnd) %></p>
+  <p>Security deposit: <%= formatVnd(booking.securityDepositVnd) %></p>
+  <p>Total to pay: <strong><%= formatVnd(booking.amountDueVnd || (booking.finalRoomChargeVnd + booking.securityDepositVnd)) %></strong></p>
+</div>
+
+<% if (booking.status === 'pending_payment') { %>
+<div class="card">
+  <h2>Payment</h2>
+  <% if (hold) { %>
+    <p>Hold expires at <%= formatDateTime(hold.heldUntil) %>.</p>
+    <p>Time left: <span class="countdown" id="countdown"></span></p>
+    <script>
+      (function(){
+        const expiresAt = new Date('<%= hold.heldUntil.toISOString() %>').getTime();
+        const el = document.getElementById('countdown');
+        function tick(){
+          const ms = expiresAt - Date.now();
+          if (ms <= 0) { el.textContent = 'Expired — please search availability again.'; return; }
+          const m = Math.floor(ms / 60000), s = Math.floor((ms%60000)/1000);
+          el.textContent = m + 'm ' + (s<10?'0':'') + s + 's';
+          setTimeout(tick, 500);
+        }
+        tick();
+      })();
+    </script>
+  <% } %>
+  <p>Bank transfer instructions:</p>
+  <pre>BANK: VCB
+ACCOUNT: 0123456789
+NAME: SHORT-STAY VN
+REFERENCE: <%= booking.bookingNumber %>
+AMOUNT: <%= formatVnd(booking.amountDueVnd) %></pre>
+  <form method="post" action="/book/<%= booking.bookingNumber %>/upload-proof" enctype="multipart/form-data">
+    <label><%= t('booking.upload_proof') %></label>
+    <input type="file" name="screenshot" accept="image/*" required />
+    <p><button type="submit">Upload &amp; confirm</button></p>
+  </form>
+</div>
+<% } else if (booking.status === 'confirmed' || booking.paymentStatus === 'proof_uploaded') { %>
+<div class="card">
+  <p class="success">Payment received — your booking is <strong>confirmed</strong>.</p>
+  <p><a class="btn" href="/book/<%= booking.bookingNumber %>/confirmation">View confirmation</a></p>
+</div>
+<% } else if (booking.status === 'cancelled') { %>
+<div class="card"><p class="error">This booking has been cancelled.</p></div>
+<% } %>
+<%- include('_footer') %>

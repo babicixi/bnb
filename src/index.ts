@@ -10,3 +10,4 @@ export * from "./services/commission.js";
 export * from "./services/cleaning.js";
 export * from "./services/lifecycle.js";
 export * from "./services/permissions.js";
+export * from "./services/notifications.js";
