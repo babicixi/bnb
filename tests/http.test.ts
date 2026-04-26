@@ -605,6 +605,38 @@ describe("reports + CSV exports", () => {
   });
 });
 
+describe("maintenance blocks", () => {
+  it("admin can create a maintenance block, and it blocks availability", async () => {
+    const admin = await loginAs("admin");
+    const day = uniqueDayOffset();
+    const startsAt = vietnamIso(day, 0);
+    const endsAt = vietnamIso(day + 1, 0);
+    const create = await admin.post("/admin/maintenance").type("form").send({
+      roomId: "room-1",
+      startsAt,
+      endsAt,
+      reason: "maintenance",
+      notes: "boiler service",
+    });
+    expect(create.status).toBe(302);
+    expect(ctx.repo.maintenanceBlocks.length).toBeGreaterThan(0);
+
+    // Try to book during the block
+    const attempt = await request(ctx.app)
+      .post("/book/hold")
+      .type("form")
+      .send({
+        roomId: "room-1",
+        bookingType: "day",
+        checkInAt: vietnamIso(day, 15),
+        checkOutAt: vietnamIso(day, 18),
+        guestName: "Conflict Guest",
+        guestPhone: "+84161616161",
+      });
+    expect(attempt.status).toBe(409);
+  });
+});
+
 describe("notifications + tasks + auto-close", () => {
   it("notification log captures booking_confirmed and creates an admin task on refund_pending", async () => {
     const beforeLog = ctx.repo.notificationLog.length;

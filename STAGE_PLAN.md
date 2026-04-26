@@ -2,6 +2,32 @@
 
 This file tracks per-stage progress against the spec in `Nam documentation.docx`. Mark each item `[x]` when done, `[~]` when partially done with notes, `[ ]` when pending.
 
+## Where we are now
+
+- **Stage 1 — Backend foundation**: COMPLETE.
+- **Stage 2 — MVP web workflow & role dashboards**: COMPLETE.
+- **Stage 3 — Operations / pricing / discounts / commission ledger / audit log**: ~90% done. (Room/building CRUD + minibar approval workflow + recurring cleaner availability deferred.)
+- **Stage 4 — Reports & CSV exports**: ~85% done. (Charts deferred; reports are table-first.)
+- **Stage 5 — Notifications, internal tasks, lifecycle auto-close, guest lookup**: ~75% done. (Channel transports and editable EN/VI templates deferred.)
+- **Stage 6 — OTA/iCal + public polish**: only maintenance blocks landed. iCal import/export, external calendar conflict dashboard, SEO/site polish all deferred.
+- **Stages 7–10**: not started. Stage 8 has `.env.example` + a deployment checklist as a foothold.
+
+**66 vitest tests passing** (41 backend pure-function + 25 HTTP/E2E). Typecheck and lint clean.
+
+Source of truth lives in `src/` (services, repo, server). Tests in `tests/`. Stages 1–5 each have their own commit; Stage 6/8-prep is the next commit.
+
+## Highest-value next steps (when you pick this back up)
+
+1. **Swap the in-memory repo for Postgres**. The service layer doesn't change — write a `src/repo/postgres.ts` that implements the same shape against `migrations/0001` + `0002`. This unlocks production.
+2. **Wire one notification transport** (email is the obvious first one — Resend / SES / Postmark). The EventEmitter is already broadcasting every event.
+3. **Add CSRF protection on form posts** before any external exposure. Express has well-known patterns; the existing `cookie-parser`/`express-session` setup is friendly to `csurf`.
+4. **Move uploads off local disk** to Supabase Storage (or S3) with private bucket + signed URLs. The current `uploads/` dir is fine for dev only.
+5. **Real cron** for the operational sweep — currently a 60s in-process timer. Move to a real scheduler when the app is containerised.
+6. **Stage 6 OTA work**: iCal export per room → easy first integration win for Airbnb/Booking.com listings.
+7. Charts on `/admin/reports` (chart.js or similar) once you've collected enough real data to want them.
+
+You can hand this whole codebase to Lovable / Bolt for UI polish — they'll plug into the same JSON shapes the EJS templates render today.
+
 ## Architecture decisions made for this scaffold
 
 - **Server**: Express 4 + EJS templates (server-rendered). Chosen over Next.js because Windows + DriveFS makes Next's native deps fragile, and SSR gives mobile-friendly forms with zero client JS.
@@ -166,17 +192,17 @@ Status: IN PROGRESS (notification log, internal task queue, auto-checkout, auto-
 
 ## Stage 6 — OTA/iCal foundation + public website polish + maintenance blocks
 
-Status: NOT STARTED.
+Status: PARTIAL — only maintenance blocks landed.
 
-- [ ] OTA fields finalized
-- [ ] iCal import/export services
-- [ ] External block model
-- [ ] Conflict dashboard
-- [ ] Public site polish (mobile-first, EN/VI)
-- [ ] SEO basics
-- [ ] Editable content (homepage/FAQ/policies)
-- [ ] Maintenance blocks
-- [ ] Tests
+- [x] OTA fields finalized (already on `Booking` since Stage 1: external_channel, external_reservation_id, external_calendar_event_id, sync_status, last_synced_at).
+- [ ] iCal import/export services — deferred.
+- [ ] External block model — deferred.
+- [ ] Conflict dashboard — deferred.
+- [ ] Public site polish (mobile-first, EN/VI) — current EJS site is mobile-friendly via the responsive CSS but no further polish.
+- [ ] SEO basics — deferred.
+- [ ] Editable content (homepage/FAQ/policies) — deferred.
+- [x] Maintenance blocks — `MaintenanceBlock` type + `repo.maintenanceBlocks` + `/admin/maintenance` CRUD + audit + checkAvailability integration.
+- [x] Tests for maintenance block preventing availability.
 
 ## Stage 7 — PWA + mobile workflows
 
@@ -189,6 +215,9 @@ Status: NOT STARTED.
 
 ## Stage 8 — Security, compliance, backup, production readiness
 
+Status: PARTIAL — `.env.example` + deployment checklist landed. Everything else deferred.
+
+- [x] `.env.example` + deployment checklist (in README)
 - [ ] Auth hardening (sessions, password reset, 2FA placeholder)
 - [ ] Server-side authorization audit
 - [ ] Sensitive data masking + private file access

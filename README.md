@@ -271,14 +271,14 @@ Every `notify(event, payload)` call is captured into `repo.notificationLog` (adm
 
 A subset of events also auto-creates an `InternalTask` for admin/manager:
 
-| Event                        | Task title                                                  | Priority |
-|------------------------------|-------------------------------------------------------------|----------|
-| `payment_proof_invalid`      | Contact guest about invalid payment proof                   | high     |
-| `refund_pending`             | Process pending refund                                      | high     |
-| `extra_payment_required`     | Collect extra payment from guest                            | high     |
-| `cancellation_requested`     | Approve or reject cancellation request                      | high     |
-| `damage_reported`            | Review damage report                                        | normal   |
-| `hold_expired`               | Hold expired without payment — review if recovery needed    | normal   |
+| Event                    | Task title                                               | Priority |
+| ------------------------ | -------------------------------------------------------- | -------- |
+| `payment_proof_invalid`  | Contact guest about invalid payment proof                | high     |
+| `refund_pending`         | Process pending refund                                   | high     |
+| `extra_payment_required` | Collect extra payment from guest                         | high     |
+| `cancellation_requested` | Approve or reject cancellation request                   | high     |
+| `damage_reported`        | Review damage report                                     | normal   |
+| `hold_expired`           | Hold expired without payment — review if recovery needed | normal   |
 
 Tasks live at `/admin/tasks`. Open → in_progress → completed transitions, with audit log entries.
 
@@ -303,6 +303,26 @@ The Express factory (`createApp`) accepts `startSweepTimer: true` and `sweepInte
 - cancels `pending_payment` bookings whose `paymentDeadlineAt` has passed (`expireUnpaidBookings`)
 
 The pure-function helpers `runOperationalSweep` and `computeDailyChecklist` live in `src/services/automation.ts` so they can be invoked from a real cron job (or SQL-backed scheduler) once persistence lands.
+
+## Maintenance blocks
+
+Admin/manager can block any room for `maintenance` / `deep_cleaning` / `owner_use` / `offline` at `/admin/maintenance`. Active blocks are checked by `checkAvailability` and prevent bookings during the window. Removing a block writes an audit entry.
+
+## Deployment notes (Stage 8 prep)
+
+`.env.example` lists the env vars the scaffold consumes today (`PORT`, `SESSION_SECRET`) plus placeholders for future integrations (Postgres, email/SMS/Zalo/WhatsApp/Telegram, S3-style file storage). Copy to `.env` for local dev or fill in via your hosting provider.
+
+Pre-production checklist:
+
+- [ ] `SESSION_SECRET` set to a strong random string (≥32 chars).
+- [ ] Replace in-memory repo with a SQL-backed implementation against `migrations/0001_initial_schema.sql` and `migrations/0002_booking_notes_and_source.sql`.
+- [ ] Move `uploads/` to S3 / Supabase Storage (private bucket) and serve via signed URLs.
+- [ ] Front Express with HTTPS termination (reverse proxy or platform).
+- [ ] Add a real cron / job runner for the operational sweep (currently in-process).
+- [ ] Wire a notification transport (email at minimum).
+- [ ] Lock down CORS / add CSRF protection on form posts.
+- [ ] Run a security review of routes and file access.
+- [ ] Set up daily database + storage backups.
 
 ### Known limitations
 

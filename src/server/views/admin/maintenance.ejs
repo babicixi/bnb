@@ -1,0 +1,49 @@
+<%- include('../_header') %>
+<h1>Maintenance blocks</h1>
+<p><a href="/admin">← Dashboard</a></p>
+
+<div class="card">
+  <h2>Block a room</h2>
+  <form method="post" action="/admin/maintenance">
+    <label>Room</label>
+    <select name="roomId">
+      <% rooms.forEach(function(r){ %><option value="<%= r.id %>"><%= r.name %></option><% }) %>
+    </select>
+    <label>Reason</label>
+    <select name="reason">
+      <option value="maintenance">Maintenance</option>
+      <option value="deep_cleaning">Deep cleaning</option>
+      <option value="owner_use">Owner use</option>
+      <option value="offline">Offline</option>
+    </select>
+    <label>Starts at</label>
+    <input type="datetime-local" name="startsAt" required />
+    <label>Ends at</label>
+    <input type="datetime-local" name="endsAt" required />
+    <label>Notes</label>
+    <textarea name="notes" rows="2"></textarea>
+    <p><button type="submit">Add block</button></p>
+  </form>
+</div>
+
+<table>
+  <thead><tr><th>Room</th><th>Starts</th><th>Ends</th><th>Reason</th><th>Notes</th><th></th></tr></thead>
+  <tbody>
+    <% if (blocks.length === 0) { %><tr><td colspan="6" class="muted">No maintenance blocks.</td></tr><% } %>
+    <% blocks.forEach(function(b){ var r = roomById(b.roomId); %>
+      <tr>
+        <td><%= r ? r.name : b.roomId %></td>
+        <td><%= formatDateTime(b.startsAt) %></td>
+        <td><%= formatDateTime(b.endsAt) %></td>
+        <td><%= b.reason %></td>
+        <td><%= b.notes || '' %></td>
+        <td>
+          <form method="post" action="/admin/maintenance/<%= b.id %>/delete" style="display:inline" onsubmit="return confirm('Remove this block?')">
+            <button type="submit" class="danger">Remove</button>
+          </form>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('../_footer') %>

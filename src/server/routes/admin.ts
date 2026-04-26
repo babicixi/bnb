@@ -1002,6 +1002,87 @@ export function mountAdminRoutes(app: Express, repo: Repository): void {
     res.redirect("/admin/tasks");
   });
 
+  // ---------- Maintenance blocks ----------
+  router.get("/maintenance", (_req, res) => {
+    const blocks = repo.maintenanceBlocks
+      .slice()
+      .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+    res.render("admin/maintenance", {
+      title: "Maintenance blocks",
+      blocks,
+      rooms: Array.from(repo.rooms.values()),
+      roomById: (id?: string) => (id ? repo.rooms.get(id) : undefined),
+    });
+  });
+
+  const maintenanceSchema = z.object({
+    roomId: z.string(),
+    startsAt: z.string().min(1),
+    endsAt: z.string().min(1),
+    reason: z.enum(["maintenance", "deep_cleaning", "owner_use", "offline"]),
+    notes: z.string().optional(),
+  });
+
+  router.post("/maintenance", (req, res) => {
+    const parsed = maintenanceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).render("error", { title: "Invalid block", message: "" });
+      return;
+    }
+    const startsAt = parseVietnamLocal(parsed.data.startsAt);
+    const endsAt = parseVietnamLocal(parsed.data.endsAt);
+    if (
+      Number.isNaN(startsAt.getTime()) ||
+      Number.isNaN(endsAt.getTime()) ||
+      endsAt <= startsAt
+    ) {
+      res.status(400).render("error", { title: "Bad date range", message: "" });
+      return;
+    }
+    const reviewer = (req as unknown as { currentUser: { id: string } })
+      .currentUser;
+    const block = {
+      id: nextId("maintenance"),
+      roomId: parsed.data.roomId,
+      startsAt,
+      endsAt,
+      reason: parsed.data.reason,
+      notes: parsed.data.notes,
+      createdByUserId: reviewer.id,
+      createdAt: new Date(),
+    };
+    repo.maintenanceBlocks.push(block);
+    audit(repo, req, {
+      action: "maintenance.create",
+      entityType: "maintenance",
+      entityId: block.id,
+      after: {
+        roomId: block.roomId,
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        reason: block.reason,
+      },
+      notes: parsed.data.notes,
+    });
+    res.redirect("/admin/maintenance");
+  });
+
+  router.post("/maintenance/:id/delete", (req, res) => {
+    const idx = repo.maintenanceBlocks.findIndex((b) => b.id === req.params.id);
+    if (idx < 0) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const removed = repo.maintenanceBlocks[idx]!;
+    repo.maintenanceBlocks.splice(idx, 1);
+    audit(repo, req, {
+      action: "maintenance.delete",
+      entityType: "maintenance",
+      entityId: removed.id,
+    });
+    res.redirect("/admin/maintenance");
+  });
+
   router.get("/audit", (_req, res) => {
     const entries = repo.auditLog.slice().reverse().slice(0, 200);
     res.render("admin/audit", {

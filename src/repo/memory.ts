@@ -14,6 +14,7 @@ import type {
   Guest,
   Id,
   InternalTask,
+  MaintenanceBlock,
   MinibarItem,
   MinibarUsage,
   NotificationLogEntry,
@@ -48,6 +49,7 @@ export interface Repository {
   commissionLedger: Map<Id, CommissionLedgerEntry>;
   notificationLog: NotificationLogEntry[];
   tasks: Map<Id, InternalTask>;
+  maintenanceBlocks: MaintenanceBlock[];
 
   bookingNumberCounter: { value: number };
 }
@@ -77,6 +79,7 @@ export function createRepository(): Repository {
     commissionLedger: new Map(),
     notificationLog: [],
     tasks: new Map(),
+    maintenanceBlocks: [],
     bookingNumberCounter: { value: 0 },
   };
 }
@@ -95,10 +98,12 @@ export function nextId(prefix: string): Id {
 export function listAvailabilityContext(repo: Repository): {
   bookings: Booking[];
   holds: BookingHold[];
+  maintenanceBlocks: MaintenanceBlock[];
 } {
   return {
     bookings: Array.from(repo.bookings.values()),
     holds: repo.holds,
+    maintenanceBlocks: repo.maintenanceBlocks,
   };
 }
 

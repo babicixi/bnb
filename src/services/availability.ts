@@ -3,6 +3,7 @@ import type {
   BookingHold,
   BookingStatus,
   Id,
+  MaintenanceBlock,
 } from "../domain/types.js";
 import {
   addMinutes,
@@ -28,11 +29,12 @@ const BLOCKING_BOOKING_STATUSES = new Set<BookingStatus>([
 export interface AvailabilityContext {
   bookings: Booking[];
   holds: BookingHold[];
+  maintenanceBlocks?: MaintenanceBlock[];
 }
 
 export interface AvailabilityResult {
   available: boolean;
-  conflicts: Array<{ type: "booking" | "hold"; id: Id }>;
+  conflicts: Array<{ type: "booking" | "hold" | "maintenance"; id: Id }>;
 }
 
 export function checkAvailability(
@@ -83,6 +85,20 @@ export function checkAvailability(
       )
     ) {
       conflicts.push({ type: "hold", id: hold.id });
+    }
+  }
+
+  for (const block of context.maintenanceBlocks ?? []) {
+    if (block.roomId !== roomId) continue;
+    if (
+      overlaps(
+        requestedCheckIn,
+        requestedCheckOut,
+        block.startsAt,
+        block.endsAt,
+      )
+    ) {
+      conflicts.push({ type: "maintenance", id: block.id });
     }
   }
 

@@ -256,6 +256,23 @@ export interface RefundRecord {
   refundDueVnd: number;
 }
 
+export type MaintenanceReason =
+  | "maintenance"
+  | "deep_cleaning"
+  | "owner_use"
+  | "offline";
+
+export interface MaintenanceBlock {
+  id: Id;
+  roomId: Id;
+  startsAt: Date;
+  endsAt: Date;
+  reason: MaintenanceReason;
+  notes?: string;
+  createdByUserId?: Id;
+  createdAt: Date;
+}
+
 export interface NotificationLogEntry {
   id: Id;
   event: string;
