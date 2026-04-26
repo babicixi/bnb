@@ -239,6 +239,31 @@ The admin area now includes:
 
 Cleaning crew get **`/cleaning/availability/me`** to add and toggle their own availability windows.
 
+## Stage 4 — Reports & exports
+
+`/admin/reports` (admin/manager only) renders a date-range filtered view with:
+
+- **Revenue summary cards**: net revenue, gross-before-discounts, discounts given, refunds owed, minibar, damages, pending extra payments, projected (held + pending payment), average booking value, bookings counted, cancellations, cancellation rate.
+- **Occupancy**: total available room-hours in the window, booked hours, cleaning-buffer hours (reported separately), overall occupancy %, plus a per-room breakdown.
+- **By room**: per-room totals matching the summary.
+- **Sales agent performance**: bookings, confirmed, cancelled, net revenue, discounts used, commission earned (calculated on bookings) + commission pending and paid (from the ledger).
+- **Cleaner performance**: jobs assigned, jobs completed, average rating, fixed pay earned.
+
+Plus CSV exports protected by the same admin/manager middleware:
+
+- `/admin/exports/bookings.csv`
+- `/admin/exports/revenue.csv?from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `/admin/exports/commission-ledger.csv`
+- `/admin/exports/audit.csv`
+
+Calculation primitives live in `src/services/reports.ts` and are pure functions over iterables, so they can run against any backend. `bookingsToCsv` and `rowsToCsv` provide RFC-4180-style escaping (quote-wrap when value contains comma/quote/newline; quotes doubled).
+
+Reports deliberately:
+- exclude `cancelled` and `held` bookings from revenue
+- count `pending_payment` and `held` separately as projected revenue
+- track refunds in their own column rather than netting them out of gross
+- report cleaning buffer hours separately from booked hours so occupancy reflects paid time only
+
 ### Operational automation
 
 The Express factory (`createApp`) accepts `startSweepTimer: true` and `sweepIntervalMs` (default 60s). The sweep:

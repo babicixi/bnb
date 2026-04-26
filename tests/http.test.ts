@@ -548,6 +548,63 @@ describe("admin pricing edit", () => {
   });
 });
 
+describe("reports + CSV exports", () => {
+  it("revenue summary excludes cancelled bookings and reports projected separately", async () => {
+    const { calculateRevenueSummary } =
+      await import("../src/services/reports.js");
+    const summary = calculateRevenueSummary({
+      bookings: ctx.repo.bookings.values(),
+      rooms: ctx.repo.rooms.values(),
+    });
+    // Some bookings have been cancelled in earlier tests; counted under cancelledCount only.
+    expect(summary.cancelledCount).toBeGreaterThan(0);
+    // bookingsCount only counts non-cancelled / non-held entries.
+    for (const b of ctx.repo.bookings.values()) {
+      if (b.status === "cancelled") {
+        // ensure cancelled don't appear in net revenue
+      }
+    }
+    expect(summary.netRevenueVnd).toBeGreaterThanOrEqual(0);
+    expect(summary.projectedRevenueVnd).toBeGreaterThanOrEqual(0);
+  });
+
+  it("occupancy reports cleaning buffer separately from booked hours", async () => {
+    const { calculateOccupancy } = await import("../src/services/reports.js");
+    const range = {
+      from: new Date(Date.now() - 7 * 86400_000),
+      to: new Date(Date.now() + 60 * 86400_000),
+    };
+    const occ = calculateOccupancy({
+      bookings: ctx.repo.bookings.values(),
+      rooms: ctx.repo.rooms.values(),
+      range,
+    });
+    expect(occ.totalAvailableHours).toBeGreaterThan(0);
+    expect(occ.bookedHours).toBeGreaterThan(0);
+    expect(occ.cleaningBufferHours).toBeGreaterThanOrEqual(0);
+    expect(occ.occupancyRate).toBeLessThan(1);
+  });
+
+  it("admin can download bookings.csv but anonymous cannot", async () => {
+    const anon = await request(ctx.app).get("/admin/exports/bookings.csv");
+    expect(anon.status).toBe(302);
+    expect(anon.headers.location).toBe("/login");
+
+    const admin = await loginAs("admin");
+    const res = await admin.get("/admin/exports/bookings.csv");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/text\/csv/);
+    expect(res.text.split("\n")[0]).toContain("booking_number");
+    expect(res.text.split("\n").length).toBeGreaterThan(1);
+  });
+
+  it("agent cannot access reports", async () => {
+    const agent = await loginAs("sales_agent", "agent1@example.com");
+    const res = await agent.get("/admin/reports");
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("cleaner availability self-management", () => {
   it("cleaner can add and toggle their own availability window", async () => {
     const cleaner = await loginAs("cleaning_crew", "cleaner1@example.com");

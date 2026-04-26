@@ -1,0 +1,120 @@
+<%- include('../_header') %>
+<h1>Reports</h1>
+<p><a href="/admin">← Dashboard</a></p>
+
+<form method="get" action="/admin/reports" class="card">
+  <div class="grid cols-2">
+    <div><label>From</label><input type="date" name="from" value="<%= range.from %>" /></div>
+    <div><label>To</label><input type="date" name="to" value="<%= range.to %>" /></div>
+  </div>
+  <p><button type="submit">Apply</button></p>
+</form>
+
+<div class="card">
+  <h2>Summary <span class="muted-small"><%= range.from %> → <%= range.to %></span></h2>
+  <div class="grid cols-3">
+    <div><strong><%= formatVnd(summary.netRevenueVnd) %></strong><br/><span class="muted-small">Net revenue</span></div>
+    <div><strong><%= formatVnd(summary.grossRevenueVnd) %></strong><br/><span class="muted-small">Gross before discounts</span></div>
+    <div><strong><%= formatVnd(summary.discountsVnd) %></strong><br/><span class="muted-small">Discounts given</span></div>
+    <div><strong><%= formatVnd(summary.refundsVnd) %></strong><br/><span class="muted-small">Refunds owed</span></div>
+    <div><strong><%= formatVnd(summary.minibarVnd) %></strong><br/><span class="muted-small">Minibar</span></div>
+    <div><strong><%= formatVnd(summary.damagesVnd) %></strong><br/><span class="muted-small">Damages</span></div>
+    <div><strong><%= formatVnd(summary.pendingExtraPaymentsVnd) %></strong><br/><span class="muted-small">Pending extra payments</span></div>
+    <div><strong><%= formatVnd(summary.projectedRevenueVnd) %></strong><br/><span class="muted-small">Projected (held / pending)</span></div>
+    <div><strong><%= formatVnd(summary.averageBookingValueVnd) %></strong><br/><span class="muted-small">Avg booking value</span></div>
+    <div><strong><%= summary.bookingsCount %></strong><br/><span class="muted-small">Bookings counted</span></div>
+    <div><strong><%= summary.cancelledCount %></strong><br/><span class="muted-small">Cancellations</span></div>
+    <div><strong><%= (summary.cancellationRate * 100).toFixed(1) %>%</strong><br/><span class="muted-small">Cancellation rate</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Occupancy</h2>
+  <p>Booked: <strong><%= occupancy.bookedHours.toFixed(1) %> h</strong> · Cleaning buffer: <%= occupancy.cleaningBufferHours.toFixed(1) %> h · Available: <%= occupancy.totalAvailableHours.toFixed(1) %> h</p>
+  <p>Overall occupancy: <strong><%= (occupancy.occupancyRate * 100).toFixed(1) %>%</strong> (paid hours only — cleaning buffer reported separately)</p>
+  <table>
+    <thead><tr><th>Room</th><th>Booked h</th><th>Buffer h</th><th>Occupancy</th></tr></thead>
+    <tbody>
+      <% occupancy.byRoom.forEach(function(r){ var room = rooms.get(r.roomId); %>
+        <tr>
+          <td><%= room ? room.name : r.roomId %></td>
+          <td><%= r.bookedHours.toFixed(1) %></td>
+          <td><%= r.cleaningBufferHours.toFixed(1) %></td>
+          <td><%= (r.occupancyRate * 100).toFixed(1) %>%</td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>By room</h2>
+  <table>
+    <thead><tr><th>Room</th><th>Bookings</th><th>Net</th><th>Gross</th><th>Discounts</th><th>Refunds</th></tr></thead>
+    <tbody>
+      <% summary.byRoom.forEach(function(r){ var room = rooms.get(r.roomId); %>
+        <tr>
+          <td><%= room ? room.name : r.roomId %></td>
+          <td><%= r.bookings %></td>
+          <td><%= formatVnd(r.netRevenueVnd) %></td>
+          <td><%= formatVnd(r.grossRevenueVnd) %></td>
+          <td><%= formatVnd(r.discountsVnd) %></td>
+          <td><%= formatVnd(r.refundsVnd) %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Sales agent performance</h2>
+  <table>
+    <thead><tr><th>Agent</th><th>Bookings</th><th>Confirmed</th><th>Cancelled</th><th>Net revenue</th><th>Discounts used</th><th>Commission earned</th><th>Pending</th><th>Paid</th></tr></thead>
+    <tbody>
+      <% if (agentPerf.length === 0) { %><tr><td colspan="9" class="muted">No agent activity in window.</td></tr><% } %>
+      <% agentPerf.forEach(function(a){ var u = users.get(a.agentId); %>
+        <tr>
+          <td><%= u ? u.fullName : a.agentId %></td>
+          <td><%= a.bookings %></td>
+          <td><%= a.confirmed %></td>
+          <td><%= a.cancelled %></td>
+          <td><%= formatVnd(a.netRevenueVnd) %></td>
+          <td><%= formatVnd(a.discountsUsedVnd) %></td>
+          <td><%= formatVnd(a.commissionEarnedVnd) %></td>
+          <td><%= formatVnd(a.commissionPendingVnd) %></td>
+          <td><%= formatVnd(a.commissionPaidVnd) %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Cleaning crew performance</h2>
+  <table>
+    <thead><tr><th>Cleaner</th><th>Assigned</th><th>Completed</th><th>Avg rating</th><th>Pay earned</th></tr></thead>
+    <tbody>
+      <% if (cleanerPerf.length === 0) { %><tr><td colspan="5" class="muted">No cleaning activity in window.</td></tr><% } %>
+      <% cleanerPerf.forEach(function(c){ var u = users.get(c.cleanerId); %>
+        <tr>
+          <td><%= u ? u.fullName : c.cleanerId %></td>
+          <td><%= c.jobsAssigned %></td>
+          <td><%= c.jobsCompleted %></td>
+          <td><%= c.averageRating != null ? c.averageRating.toFixed(2) : '—' %></td>
+          <td><%= formatVnd(c.fixedPayEarnedVnd) %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Exports</h2>
+  <p>
+    <a class="btn secondary" href="/admin/exports/bookings.csv">Bookings CSV</a>
+    <a class="btn secondary" href="/admin/exports/revenue.csv?from=<%= range.from %>&to=<%= range.to %>">Revenue CSV</a>
+    <a class="btn secondary" href="/admin/exports/commission-ledger.csv">Commission ledger CSV</a>
+    <a class="btn secondary" href="/admin/exports/audit.csv">Audit log CSV</a>
+  </p>
+</div>
+<%- include('../_footer') %>

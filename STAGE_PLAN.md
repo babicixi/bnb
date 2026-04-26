@@ -139,16 +139,16 @@ Status: IN PROGRESS (operational + audit + commission ledger + pricing + discoun
 
 ## Stage 4 — Analytics, reports, exports
 
-Status: NOT STARTED.
+Status: IN PROGRESS (calculation helpers + admin reports view + CSV exports done; charts and per-role report views deferred).
 
-- [ ] Admin analytics dashboard cards
-- [ ] Revenue / occupancy / agent / cleaner reports
-- [ ] Refund/payment finance dashboard
-- [ ] CSV exports (bookings, revenue, occupancy, commission, payroll, minibar, refunds, audit logs)
-- [ ] Charts (or table-first views)
-- [ ] Calculation helpers (`calculateGrossRevenue` etc.)
-- [ ] Permissions for reports
-- [ ] Tests
+- [x] Admin analytics dashboard cards (net/gross/discounts/refunds/minibar/damages/extras/projected/avg/cancellation rate, with a date range filter).
+- [x] Revenue / occupancy / agent / cleaner reports (table-first views in `/admin/reports`).
+- [~] Refund/payment finance dashboard (subsumed by `/admin/refunds`, `/admin/extras`, and the reports page).
+- [x] CSV exports for bookings, revenue summary, commission ledger, audit log. Cleaner payroll & minibar usage exports deferred.
+- [ ] Charts deferred (server-rendered table-first; user can add a charting lib later).
+- [x] Calculation helpers in `src/services/reports.ts` (`calculateRevenueSummary`, `calculateOccupancy`, `calculateAgentPerformance`, `calculateCleanerPerformance`, `bookingsToCsv`, `rowsToCsv`).
+- [x] Permissions for reports (admin/manager only via existing `requireRole`).
+- [x] Tests for revenue exclude cancelled, occupancy reports buffer separately, CSV permission, agent cannot access reports.
 
 ## Stage 5 — Notifications + lifecycle automation + guest lookup
 

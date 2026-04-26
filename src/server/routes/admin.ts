@@ -13,6 +13,14 @@ import { requireRole } from "../middleware/auth.js";
 import { notify } from "../../services/notifications.js";
 import { parseVietnamLocal } from "../parseTime.js";
 import { computeDailyChecklist } from "../../services/automation.js";
+import {
+  bookingsToCsv,
+  calculateAgentPerformance,
+  calculateCleanerPerformance,
+  calculateOccupancy,
+  calculateRevenueSummary,
+  rowsToCsv,
+} from "../../services/reports.js";
 import { snapshotBooking } from "../../services/audit.js";
 import { audit } from "../auditHelper.js";
 import {
@@ -21,6 +29,15 @@ import {
   voidCommission,
 } from "../../services/commissionLedger.js";
 import type { RequestWithUser } from "../middleware/auth.js";
+
+function defaultRange(): { from: Date; to: Date } {
+  const now = new Date();
+  const from = new Date(now);
+  from.setUTCDate(from.getUTCDate() - 30);
+  const to = new Date(now);
+  to.setUTCDate(to.getUTCDate() + 60);
+  return { from, to };
+}
 
 const filterSchema = z.object({
   from: z.string().optional(),
@@ -405,12 +422,10 @@ export function mountAdminRoutes(app: Express, repo: Repository): void {
         entityId: entry.id,
       });
     } catch (err) {
-      res
-        .status(400)
-        .render("error", {
-          title: "Cannot approve",
-          message: (err as Error).message,
-        });
+      res.status(400).render("error", {
+        title: "Cannot approve",
+        message: (err as Error).message,
+      });
       return;
     }
     res.redirect("/admin/commissions");
@@ -431,12 +446,10 @@ export function mountAdminRoutes(app: Express, repo: Repository): void {
         entityId: entry.id,
       });
     } catch (err) {
-      res
-        .status(400)
-        .render("error", {
-          title: "Cannot mark paid",
-          message: (err as Error).message,
-        });
+      res.status(400).render("error", {
+        title: "Cannot mark paid",
+        message: (err as Error).message,
+      });
       return;
     }
     res.redirect("/admin/commissions");
@@ -457,12 +470,10 @@ export function mountAdminRoutes(app: Express, repo: Repository): void {
         entityId: entry.id,
       });
     } catch (err) {
-      res
-        .status(400)
-        .render("error", {
-          title: "Cannot void",
-          message: (err as Error).message,
-        });
+      res.status(400).render("error", {
+        title: "Cannot void",
+        message: (err as Error).message,
+      });
       return;
     }
     res.redirect("/admin/commissions");
@@ -602,12 +613,10 @@ export function mountAdminRoutes(app: Express, repo: Repository): void {
       return;
     }
     if (parsed.data.fromRoomId === parsed.data.toRoomId) {
-      res
-        .status(400)
-        .render("error", {
-          title: "Same room",
-          message: "Pick a different target room.",
-        });
+      res.status(400).render("error", {
+        title: "Same room",
+        message: "Pick a different target room.",
+      });
       return;
     }
     const sourceRates = repo.rates.filter(
@@ -807,6 +816,141 @@ export function mountAdminRoutes(app: Express, repo: Repository): void {
       after: { isActive: item.isActive },
     });
     res.redirect("/admin/minibar");
+  });
+
+  // ---------- Reports ----------
+  function parseRange(
+    q: Record<string, unknown>,
+  ): { from: Date; to: Date } | undefined {
+    const from = q.from ? new Date(String(q.from)) : undefined;
+    const to = q.to ? new Date(String(q.to)) : undefined;
+    if (
+      !from ||
+      !to ||
+      Number.isNaN(from.getTime()) ||
+      Number.isNaN(to.getTime())
+    )
+      return undefined;
+    return { from, to };
+  }
+
+  router.get("/reports", (req, res) => {
+    const range =
+      parseRange(req.query as Record<string, unknown>) ?? defaultRange();
+    const summary = calculateRevenueSummary({
+      bookings: repo.bookings.values(),
+      rooms: repo.rooms.values(),
+      range,
+    });
+    const occupancy = calculateOccupancy({
+      bookings: repo.bookings.values(),
+      rooms: repo.rooms.values(),
+      range,
+    });
+    const agentPerf = calculateAgentPerformance({
+      bookings: repo.bookings.values(),
+      ledger: repo.commissionLedger.values(),
+      range,
+    });
+    const cleanerPerf = calculateCleanerPerformance({
+      cleaningJobs: repo.cleaningJobs.values(),
+      profiles: repo.cleaningCrewProfiles.values(),
+      range,
+    });
+    res.render("admin/reports", {
+      title: "Reports",
+      range: {
+        from: range.from.toISOString().slice(0, 10),
+        to: range.to.toISOString().slice(0, 10),
+      },
+      summary,
+      occupancy,
+      agentPerf,
+      cleanerPerf,
+      rooms: repo.rooms,
+      users: repo.users,
+    });
+  });
+
+  router.get("/exports/bookings.csv", (_req, res) => {
+    const csv = bookingsToCsv(repo.bookings.values());
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="bookings-${Date.now()}.csv"`,
+    );
+    res.send(csv);
+  });
+
+  router.get("/exports/revenue.csv", (req, res) => {
+    const range =
+      parseRange(req.query as Record<string, unknown>) ?? defaultRange();
+    const summary = calculateRevenueSummary({
+      bookings: repo.bookings.values(),
+      rooms: repo.rooms.values(),
+      range,
+    });
+    const csv = rowsToCsv(
+      summary.byRoom.map((r) => ({
+        room_id: r.roomId,
+        bookings: r.bookings,
+        gross: r.grossRevenueVnd,
+        discounts: r.discountsVnd,
+        net: r.netRevenueVnd,
+        refunds: r.refundsVnd,
+        minibar: r.minibarVnd,
+        damages: r.damagesVnd,
+      })),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="revenue-${Date.now()}.csv"`,
+    );
+    res.send(csv);
+  });
+
+  router.get("/exports/commission-ledger.csv", (_req, res) => {
+    const csv = rowsToCsv(
+      Array.from(repo.commissionLedger.values()).map((e) => ({
+        id: e.id,
+        booking_id: e.bookingId,
+        sales_agent_id: e.salesAgentId,
+        amount_vnd: e.amountVnd,
+        status: e.status,
+        paid_at: e.paidAt ? e.paidAt.toISOString() : "",
+        created_at: e.createdAt.toISOString(),
+      })),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="commission-ledger-${Date.now()}.csv"`,
+    );
+    res.send(csv);
+  });
+
+  router.get("/exports/audit.csv", (_req, res) => {
+    const csv = rowsToCsv(
+      repo.auditLog.map((e) => ({
+        id: e.id,
+        created_at: e.createdAt.toISOString(),
+        actor_user_id: e.actorUserId ?? "",
+        actor_role: e.actorRole ?? "",
+        action: e.action,
+        entity_type: e.entityType,
+        entity_id: e.entityId,
+        notes: e.notes ?? "",
+        before: e.before ? JSON.stringify(e.before) : "",
+        after: e.after ? JSON.stringify(e.after) : "",
+      })),
+    );
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="audit-${Date.now()}.csv"`,
+    );
+    res.send(csv);
   });
 
   router.get("/audit", (_req, res) => {
