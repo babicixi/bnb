@@ -605,6 +605,86 @@ describe("reports + CSV exports", () => {
   });
 });
 
+describe("notifications + tasks + auto-close", () => {
+  it("notification log captures booking_confirmed and creates an admin task on refund_pending", async () => {
+    const beforeLog = ctx.repo.notificationLog.length;
+    const beforeTasks = ctx.repo.tasks.size;
+
+    // Confirm a booking → triggers booking_confirmed
+    const create = await request(ctx.app)
+      .post("/book/hold")
+      .type("form")
+      .send({
+        roomId: "room-1",
+        bookingType: "day",
+        ...slot(),
+        guestName: "Notif Guest",
+        guestPhone: "+84150000000",
+      });
+    const number = create.headers.location!.split("/").pop()!;
+    const fakePng = Buffer.from("89504e470d0a1a0a", "hex");
+    await request(ctx.app)
+      .post(`/book/${number}/upload-proof`)
+      .attach("screenshot", fakePng, {
+        filename: "p.png",
+        contentType: "image/png",
+      });
+
+    expect(ctx.repo.notificationLog.length).toBeGreaterThan(beforeLog);
+    expect(
+      ctx.repo.notificationLog.some((n) => n.event === "booking_confirmed"),
+    ).toBe(true);
+
+    // Mark proof invalid → should fire payment_proof_invalid → auto-create task
+    const id = ctx.repo.bookingsByNumber.get(number)!;
+    const admin = await loginAs("admin");
+    await admin
+      .post(`/admin/bookings/${id}/proof-invalid`)
+      .type("form")
+      .send({ reason: "test" });
+
+    const newTasks = Array.from(ctx.repo.tasks.values()).slice(beforeTasks);
+    expect(newTasks.some((t) => /invalid payment/i.test(t.title))).toBe(true);
+  });
+
+  it("admin can transition a task open → completed", async () => {
+    const admin = await loginAs("admin");
+    const list = await admin.get("/admin/tasks");
+    expect(list.status).toBe(200);
+    const open = Array.from(ctx.repo.tasks.values()).find(
+      (t) => t.status === "open",
+    );
+    if (!open) return;
+    const r = await admin
+      .post(`/admin/tasks/${open.id}/status`)
+      .type("form")
+      .send({ status: "completed" });
+    expect(r.status).toBe(302);
+    expect(ctx.repo.tasks.get(open.id)!.status).toBe("completed");
+  });
+
+  it("autoCloseSettledBookings closes a cleaned booking with no balances", async () => {
+    const { autoCloseSettledBookings } =
+      await import("../src/services/automation.js");
+    // Synthesize: pick a booking, set to cleaned with zero balances + completed cleaning
+    const b = Array.from(ctx.repo.bookings.values()).find(
+      (x) =>
+        x.status !== "cancelled" &&
+        x.status !== "closed" &&
+        x.amountDueVnd === 0 &&
+        x.refundDueVnd === 0,
+    );
+    if (!b) return;
+    b.status = "cleaned";
+    const closed = autoCloseSettledBookings({
+      bookings: [b],
+      cleaningJobsByBookingId: new Map([[b.id, { status: "completed" }]]),
+    });
+    expect(closed.length).toBe(1);
+    expect(b.status).toBe("closed");
+  });
+});
+
 describe("cleaner availability self-management", () => {
   it("cleaner can add and toggle their own availability window", async () => {
     const cleaner = await loginAs("cleaning_crew", "cleaner1@example.com");

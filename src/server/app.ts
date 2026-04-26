@@ -14,6 +14,9 @@ import { mountAdminRoutes } from "./routes/admin.js";
 import { mountAgentRoutes } from "./routes/agent.js";
 import { mountCleaningRoutes } from "./routes/cleaning.js";
 import { runOperationalSweep } from "../services/automation.js";
+import { notifications } from "../services/notifications.js";
+import { createTask } from "../services/tasks.js";
+import { nextId } from "../repo/memory.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..", "..");
@@ -69,6 +72,102 @@ export function createApp(opts: CreateAppOptions = {}): {
       .render("error", { title: "Not found", message: "Page not found." });
   });
 
+  // Wire notification log + auto-task creation
+  const eventToTask: Record<
+    string,
+    {
+      title: string;
+      role: "admin" | "manager";
+      priority: "high" | "normal" | "urgent";
+    }
+  > = {
+    payment_proof_invalid: {
+      title: "Contact guest about invalid payment proof",
+      role: "admin",
+      priority: "high",
+    },
+    refund_pending: {
+      title: "Process pending refund",
+      role: "admin",
+      priority: "high",
+    },
+    extra_payment_required: {
+      title: "Collect extra payment from guest",
+      role: "admin",
+      priority: "high",
+    },
+    cancellation_requested: {
+      title: "Approve or reject cancellation request",
+      role: "admin",
+      priority: "high",
+    },
+    damage_reported: {
+      title: "Review damage report",
+      role: "admin",
+      priority: "normal",
+    },
+    hold_expired: {
+      title: "Hold expired without payment — review if recovery needed",
+      role: "admin",
+      priority: "normal",
+    },
+  };
+  const universal =
+    (event: string) =>
+    (payload: {
+      bookingId?: string;
+      cleaningJobId?: string;
+      actorUserId?: string;
+      meta?: Record<string, unknown>;
+      occurredAt?: Date;
+    }) => {
+      repo.notificationLog.push({
+        id: nextId("notif"),
+        event,
+        bookingId: payload.bookingId,
+        cleaningJobId: payload.cleaningJobId,
+        actorUserId: payload.actorUserId,
+        payload: payload.meta,
+        occurredAt: payload.occurredAt ?? new Date(),
+      });
+      const taskTemplate = eventToTask[event];
+      if (taskTemplate) {
+        createTask(repo.tasks, {
+          id: nextId("task"),
+          title: taskTemplate.title,
+          relatedEntityType: payload.bookingId ? "booking" : undefined,
+          relatedEntityId: payload.bookingId,
+          assignedRole: taskTemplate.role,
+          priority: taskTemplate.priority,
+        });
+      }
+    };
+  notifications.setMaxListeners(50);
+  for (const event of [
+    "booking_hold_created",
+    "hold_expiring_soon",
+    "hold_expired",
+    "payment_proof_uploaded",
+    "booking_confirmed",
+    "payment_proof_invalid",
+    "extra_payment_required",
+    "refund_pending",
+    "refund_sent",
+    "cancellation_requested",
+    "cancellation_approved",
+    "cancellation_rejected",
+    "checkin_today",
+    "checkout_today",
+    "cleaning_assigned",
+    "cleaning_started",
+    "cleaning_completed",
+    "minibar_reported",
+    "damage_reported",
+    "booking_closed",
+  ]) {
+    notifications.on(event, universal(event));
+  }
+
   let sweepTimer: NodeJS.Timeout | undefined;
   if (opts.startSweepTimer) {
     const interval = opts.sweepIntervalMs ?? 60_000;
@@ -76,6 +175,7 @@ export function createApp(opts: CreateAppOptions = {}): {
       runOperationalSweep({
         holds: repo.holds,
         bookings: repo.bookings.values(),
+        cleaningJobs: repo.cleaningJobs.values(),
       });
     }, interval);
     sweepTimer.unref?.();

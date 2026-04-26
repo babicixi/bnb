@@ -953,6 +953,55 @@ export function mountAdminRoutes(app: Express, repo: Repository): void {
     res.send(csv);
   });
 
+  router.get("/notifications", (_req, res) => {
+    const entries = repo.notificationLog.slice().reverse().slice(0, 200);
+    res.render("admin/notifications", {
+      title: "Notifications",
+      entries,
+      bookingById: (id?: string) => (id ? repo.bookings.get(id) : undefined),
+    });
+  });
+
+  router.get("/tasks", (_req, res) => {
+    const tasks = Array.from(repo.tasks.values()).sort((a, b) => {
+      if (a.status !== b.status) return a.status === "open" ? -1 : 1;
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+    res.render("admin/tasks", {
+      title: "Internal tasks",
+      tasks,
+      bookingById: (id?: string) => (id ? repo.bookings.get(id) : undefined),
+    });
+  });
+
+  router.post("/tasks/:id/status", (req, res) => {
+    const task = repo.tasks.get(req.params.id as string);
+    if (!task) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const next = String(req.body.status ?? "");
+    if (
+      next !== "open" &&
+      next !== "in_progress" &&
+      next !== "completed" &&
+      next !== "cancelled"
+    ) {
+      res.status(400).render("error", { title: "Invalid status", message: "" });
+      return;
+    }
+    task.status = next;
+    task.updatedAt = new Date();
+    if (next === "completed") task.completedAt = new Date();
+    audit(repo, req, {
+      action: "task.transition",
+      entityType: "task",
+      entityId: task.id,
+      after: { status: task.status },
+    });
+    res.redirect("/admin/tasks");
+  });
+
   router.get("/audit", (_req, res) => {
     const entries = repo.auditLog.slice().reverse().slice(0, 200);
     res.render("admin/audit", {

@@ -256,6 +256,37 @@ export interface RefundRecord {
   refundDueVnd: number;
 }
 
+export interface NotificationLogEntry {
+  id: Id;
+  event: string;
+  bookingId?: Id;
+  cleaningJobId?: Id;
+  actorUserId?: Id;
+  payload?: Record<string, unknown>;
+  occurredAt: Date;
+}
+
+export type TaskStatus = "open" | "in_progress" | "completed" | "cancelled";
+export type TaskPriority = "low" | "normal" | "high" | "urgent";
+
+export interface InternalTask {
+  id: Id;
+  title: string;
+  description?: string;
+  relatedEntityType?: string;
+  relatedEntityId?: Id;
+  assignedRole?: RoleName;
+  assignedUserId?: Id;
+  priority: TaskPriority;
+  dueAt?: Date;
+  status: TaskStatus;
+  createdByUserId?: Id;
+  completedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  notes?: string;
+}
+
 export interface AuditLogEntry {
   id: Id;
   actorUserId?: Id;

@@ -165,14 +165,14 @@ npm run format
 
 `npm run dev` boots the Express app at `http://localhost:3000`. The console prints six demo logins:
 
-| role            | email                    | password        | landing |
-|-----------------|--------------------------|-----------------|---------|
-| admin           | admin@example.com        | admin12345      | `/admin` |
-| manager         | manager@example.com      | manager12345    | `/admin` |
-| sales_agent     | agent1@example.com       | agent12345      | `/agent` |
-| sales_agent     | agent2@example.com       | agent12345      | `/agent` |
-| cleaning_crew   | cleaner1@example.com     | cleaner12345    | `/cleaning` |
-| cleaning_crew   | cleaner2@example.com     | cleaner12345    | `/cleaning` |
+| role          | email                | password     | landing     |
+| ------------- | -------------------- | ------------ | ----------- |
+| admin         | admin@example.com    | admin12345   | `/admin`    |
+| manager       | manager@example.com  | manager12345 | `/admin`    |
+| sales_agent   | agent1@example.com   | agent12345   | `/agent`    |
+| sales_agent   | agent2@example.com   | agent12345   | `/agent`    |
+| cleaning_crew | cleaner1@example.com | cleaner12345 | `/cleaning` |
+| cleaning_crew | cleaner2@example.com | cleaner12345 | `/cleaning` |
 
 Note: on Windows, installing into a Google Drive (DriveFS) path may fail because esbuild's postinstall cannot write through the DriveFS layer. The workaround used here is to install into a local copy on `C:` for verification (`robocopy` the source, `npm install` there, run scripts there), or to put `node_modules` on a junction to a local NTFS volume.
 
@@ -259,10 +259,41 @@ Plus CSV exports protected by the same admin/manager middleware:
 Calculation primitives live in `src/services/reports.ts` and are pure functions over iterables, so they can run against any backend. `bookingsToCsv` and `rowsToCsv` provide RFC-4180-style escaping (quote-wrap when value contains comma/quote/newline; quotes doubled).
 
 Reports deliberately:
+
 - exclude `cancelled` and `held` bookings from revenue
 - count `pending_payment` and `held` separately as projected revenue
 - track refunds in their own column rather than netting them out of gross
 - report cleaning buffer hours separately from booked hours so occupancy reflects paid time only
+
+## Stage 5 — Notifications, internal tasks, and lifecycle auto-close
+
+Every `notify(event, payload)` call is captured into `repo.notificationLog` (admin can view at `/admin/notifications` — last 200 entries with payload).
+
+A subset of events also auto-creates an `InternalTask` for admin/manager:
+
+| Event                        | Task title                                                  | Priority |
+|------------------------------|-------------------------------------------------------------|----------|
+| `payment_proof_invalid`      | Contact guest about invalid payment proof                   | high     |
+| `refund_pending`             | Process pending refund                                      | high     |
+| `extra_payment_required`     | Collect extra payment from guest                            | high     |
+| `cancellation_requested`     | Approve or reject cancellation request                      | high     |
+| `damage_reported`            | Review damage report                                        | normal   |
+| `hold_expired`               | Hold expired without payment — review if recovery needed    | normal   |
+
+Tasks live at `/admin/tasks`. Open → in_progress → completed transitions, with audit log entries.
+
+### Lifecycle auto-close
+
+Inside `runOperationalSweep` (60s timer when `startSweepTimer: true`):
+
+- `expireOldHolds` — marks holds whose deadline passed.
+- `expireUnpaidBookings` — cancels `pending_payment` bookings past `paymentDeadlineAt`.
+- `autoCheckoutOverdueBookings` — moves `confirmed`/`checked_in` bookings past `checkOutAt` to `checked_out`.
+- `autoCloseSettledBookings` — moves `cleaned` bookings with no outstanding `amountDue` / `refundDue` (and a completed cleaning job, if any) to `closed`.
+
+### Channel transports
+
+The notification system is currently log-only. Add a transport by attaching another listener to the shared `notifications` EventEmitter (`src/services/notifications.ts`). Stubs for email / SMS / Zalo / WhatsApp / Telegram are documented but not wired — the spec calls for placeholders, not paid integrations.
 
 ### Operational automation
 

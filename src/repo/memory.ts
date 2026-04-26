@@ -13,8 +13,10 @@ import type {
   Discount,
   Guest,
   Id,
+  InternalTask,
   MinibarItem,
   MinibarUsage,
+  NotificationLogEntry,
   Payment,
   PaymentProof,
   Room,
@@ -44,6 +46,8 @@ export interface Repository {
   cancellationRequests: Map<Id, CancellationRequest>;
   auditLog: AuditLogEntry[];
   commissionLedger: Map<Id, CommissionLedgerEntry>;
+  notificationLog: NotificationLogEntry[];
+  tasks: Map<Id, InternalTask>;
 
   bookingNumberCounter: { value: number };
 }
@@ -71,6 +75,8 @@ export function createRepository(): Repository {
     cancellationRequests: new Map(),
     auditLog: [],
     commissionLedger: new Map(),
+    notificationLog: [],
+    tasks: new Map(),
     bookingNumberCounter: { value: 0 },
   };
 }

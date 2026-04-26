@@ -1,0 +1,37 @@
+<%- include('../_header') %>
+<h1>Internal tasks</h1>
+<p><a href="/admin">← Dashboard</a></p>
+<table>
+  <thead><tr><th>Status</th><th>Priority</th><th>Title</th><th>Booking</th><th>Created</th><th>Actions</th></tr></thead>
+  <tbody>
+    <% if (tasks.length === 0) { %><tr><td colspan="6" class="muted">Nothing in the queue.</td></tr><% } %>
+    <% tasks.forEach(function(t){ var b = bookingById(t.relatedEntityId); %>
+      <tr>
+        <td><span class="badge <%= t.status === 'open' ? 'warn' : (t.status === 'completed' ? 'good' : '') %>"><%= t.status %></span></td>
+        <td><%= t.priority %></td>
+        <td><%= t.title %></td>
+        <td><% if (b) { %><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a><% } else { %>—<% } %></td>
+        <td><%= formatDateTime(t.createdAt) %></td>
+        <td>
+          <% if (t.status === 'open') { %>
+            <form method="post" action="/admin/tasks/<%= t.id %>/status" style="display:inline">
+              <input type="hidden" name="status" value="in_progress" />
+              <button class="secondary">Start</button>
+            </form>
+          <% } %>
+          <% if (t.status !== 'completed' && t.status !== 'cancelled') { %>
+            <form method="post" action="/admin/tasks/<%= t.id %>/status" style="display:inline">
+              <input type="hidden" name="status" value="completed" />
+              <button>Complete</button>
+            </form>
+            <form method="post" action="/admin/tasks/<%= t.id %>/status" style="display:inline">
+              <input type="hidden" name="status" value="cancelled" />
+              <button class="secondary">Cancel</button>
+            </form>
+          <% } %>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('../_footer') %>

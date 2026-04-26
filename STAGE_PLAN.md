@@ -152,17 +152,17 @@ Status: IN PROGRESS (calculation helpers + admin reports view + CSV exports done
 
 ## Stage 5 — Notifications + lifecycle automation + guest lookup
 
-Status: NOT STARTED.
+Status: IN PROGRESS (notification log, internal task queue, auto-checkout, auto-close, guest lookup done; channel transports and editable templates deferred).
 
-- [ ] Notification events fully fleshed
-- [ ] Channel placeholders (email/SMS/Zalo/WhatsApp/Telegram)
-- [ ] Editable EN/VI templates
-- [ ] Booking lifecycle automation (no-show, auto-checkout, auto-close)
-- [ ] Internal task queue
-- [ ] Admin task dashboard
-- [ ] Guest booking lookup
-- [ ] Message history
-- [ ] Tests
+- [x] Notification events fully fleshed (the EventEmitter is the single source; every event is captured into `repo.notificationLog`).
+- [ ] Channel placeholders (email/SMS/Zalo/WhatsApp/Telegram) — deferred. The current sink is the in-memory log; adding a transport is a single listener away.
+- [ ] Editable EN/VI templates — deferred. Static `i18n` strings live in `src/server/i18n.ts`.
+- [x] Booking lifecycle automation: `autoCheckoutOverdueBookings` and `autoCloseSettledBookings` run inside `runOperationalSweep` alongside hold/payment expiry.
+- [x] Internal task queue: `InternalTask` model + `repo.tasks` + `createTask`/`transitionTask`. Auto-creates tasks for `payment_proof_invalid`, `refund_pending`, `extra_payment_required`, `cancellation_requested`, `damage_reported`, `hold_expired`.
+- [x] Admin task dashboard at `/admin/tasks` with start/complete/cancel actions.
+- [x] Guest booking lookup at `/lookup` (already shipped in Stage 2).
+- [x] Message history at `/admin/notifications` (last 200 events with payload).
+- [x] Stage 5 tests (notification log captures booking_confirmed; payment_proof_invalid auto-creates an admin task; admin can transition tasks; auto-close works).
 
 ## Stage 6 — OTA/iCal foundation + public website polish + maintenance blocks
 
