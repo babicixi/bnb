@@ -1945,7 +1945,7 @@ export function mountAdminRoutes(
     }
     for (const p of payments) {
       const row = get(p.weekStartIso);
-      row.paidAmountVnd += p.amountVnd;
+      if (p.status !== "void") row.paidAmountVnd += p.amountVnd;
       row.payments.push(p);
     }
     const thisWeek = isoMondayOf(new Date());
@@ -1984,17 +1984,29 @@ export function mountAdminRoutes(
     return m;
   }
 
-  router.get("/agents", (_req, res) => {
+  router.get("/agents", (req, res) => {
     const agents = Array.from(repo.users.values()).filter(
       (u) => u.role === "sales_agent",
     );
     const ledgerByAgent = ledgerByAgentMap();
     const paymentsByAgent = agentPaymentsByAgentMap();
+    const fromIso =
+      typeof req.query.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)
+        ? req.query.from
+        : "";
+    const toIso =
+      typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)
+        ? req.query.to
+        : "";
+    const inRange = (wk: string) =>
+      (!fromIso || wk >= fromIso) && (!toIso || wk <= toIso);
 
     const agentRows = agents.map((a) => {
       const ledger = ledgerByAgent.get(a.id) ?? [];
       const payments = paymentsByAgent.get(a.id) ?? [];
-      const weeklyRows = buildAgentWeeklyRows(ledger, payments);
+      const weeklyRows = buildAgentWeeklyRows(ledger, payments).filter((r) =>
+        inRange(r.weekStartIso),
+      );
       const lifetimeBookings = weeklyRows.reduce(
         (s, r) => s + r.bookingCount,
         0,
@@ -2051,10 +2063,14 @@ export function mountAdminRoutes(
       b.weekStartIso.localeCompare(a.weekStartIso),
     );
 
+    const filteredAggregate = aggregateRows.filter((r) =>
+      inRange(r.weekStartIso),
+    );
     res.render("admin/agents", {
       title: "Sales agents",
       agentRows,
-      aggregateRows,
+      aggregateRows: filteredAggregate,
+      filters: { from: fromIso, to: toIso },
       countDiscountUsage: (discountId: string) =>
         Array.from(repo.bookings.values()).filter(
           (b) => b.discountIdApplied === discountId,
@@ -2312,13 +2328,18 @@ export function mountAdminRoutes(
     const limit = parsed.data.usageLimit
       ? Number(parsed.data.usageLimit)
       : undefined;
+    // Fixed discount values are entered in ₫'000s (type "100" for ₫100,000); percentage stays as-is.
+    const valueVnd =
+      parsed.data.discountType === "fixed"
+        ? Math.round(parsed.data.value * 1000)
+        : parsed.data.value;
     const discount = {
       id: nextId("discount"),
       name: parsed.data.name,
       scope: "agent_specific" as const,
       salesAgentId: u.id,
       discountType: parsed.data.discountType,
-      value: parsed.data.value,
+      value: valueVnd,
       isActive: true,
       validFrom: parsed.data.validFrom || undefined,
       validUntil: parsed.data.validUntil || undefined,
@@ -2333,6 +2354,98 @@ export function mountAdminRoutes(
       entityType: "discount",
       entityId: discount.id,
       after: discount as Record<string, unknown>,
+    });
+    res.redirect("/admin/agents");
+  });
+
+  const discountEditSchema = z.object({
+    name: z.string().min(1),
+    discountType: z.enum(["percentage", "fixed"]),
+    value: z.coerce.number().nonnegative(),
+    usageLimit: z.string().optional(),
+    validFrom: z.string().optional(),
+    validUntil: z.string().optional(),
+  });
+
+  router.post("/discounts/:id/edit", (req, res) => {
+    const d = repo.discounts.find((x) => x.id === req.params.id);
+    if (!d) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const parsed = discountEditSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .render("error", { title: "Invalid discount", message: "" });
+      return;
+    }
+    const before = { ...d };
+    d.name = parsed.data.name;
+    d.discountType = parsed.data.discountType;
+    d.value =
+      parsed.data.discountType === "fixed"
+        ? Math.round(parsed.data.value * 1000)
+        : parsed.data.value;
+    const limit = parsed.data.usageLimit
+      ? Number(parsed.data.usageLimit)
+      : undefined;
+    d.usageLimit =
+      limit !== undefined && Number.isFinite(limit) && limit > 0
+        ? limit
+        : undefined;
+    d.validFrom = parsed.data.validFrom || undefined;
+    d.validUntil = parsed.data.validUntil || undefined;
+    audit(repo, req, {
+      action: "discount.edit",
+      entityType: "discount",
+      entityId: d.id,
+      before: before as unknown as Record<string, unknown>,
+      after: { ...d } as unknown as Record<string, unknown>,
+    });
+    res.redirect("/admin/agents");
+  });
+
+  router.post("/discounts/:id/toggle", (req, res) => {
+    const d = repo.discounts.find((x) => x.id === req.params.id);
+    if (!d) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    d.isActive = !d.isActive;
+    audit(repo, req, {
+      action: "discount.toggle",
+      entityType: "discount",
+      entityId: d.id,
+      after: { isActive: d.isActive },
+    });
+    res.redirect("/admin/agents");
+  });
+
+  router.post("/discounts/:id/delete", (req, res) => {
+    const idx = repo.discounts.findIndex((x) => x.id === req.params.id);
+    if (idx < 0) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const before = repo.discounts[idx]!;
+    const used = Array.from(repo.bookings.values()).some(
+      (b) => b.discountIdApplied === before.id,
+    );
+    if (used) {
+      res.status(400).render("error", {
+        title: "Cannot delete discount",
+        message:
+          "This discount has been applied to one or more bookings. Deactivate it instead so it can no longer be used on new bookings.",
+      });
+      return;
+    }
+    repo.discounts.splice(idx, 1);
+    audit(repo, req, {
+      action: "discount.delete",
+      entityType: "discount",
+      entityId: before.id,
+      before: before as unknown as Record<string, unknown>,
     });
     res.redirect("/admin/agents");
   });
@@ -2409,6 +2522,39 @@ export function mountAdminRoutes(
       res.redirect("/admin/agents");
     },
   );
+
+  router.post("/agent-payments/:id/toggle", (req, res) => {
+    const p = repo.agentPayments.find((x) => x.id === req.params.id);
+    if (!p) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    p.status = p.status === "void" ? "paid" : "void";
+    audit(repo, req, {
+      action: "agent.payment_toggle",
+      entityType: "agent_payment",
+      entityId: p.id,
+      after: { status: p.status },
+    });
+    res.redirect("/admin/agents");
+  });
+
+  router.post("/agent-payments/:id/delete", (req, res) => {
+    const idx = repo.agentPayments.findIndex((x) => x.id === req.params.id);
+    if (idx < 0) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const before = repo.agentPayments[idx]!;
+    repo.agentPayments.splice(idx, 1);
+    audit(repo, req, {
+      action: "agent.payment_delete",
+      entityType: "agent_payment",
+      entityId: before.id,
+      before: before as unknown as Record<string, unknown>,
+    });
+    res.redirect("/admin/agents");
+  });
 
   router.get("/agents/:id/report.csv", (req, res) => {
     const u = repo.users.get(req.params.id as string);
@@ -2504,7 +2650,7 @@ export function mountAdminRoutes(
     }
     for (const p of payments) {
       const row = get(p.weekStartIso);
-      row.paidAmountVnd += p.amountVnd;
+      if (p.status !== "void") row.paidAmountVnd += p.amountVnd;
       row.payments.push(p);
     }
     const thisWeek = isoMondayOf(new Date());
@@ -2517,10 +2663,20 @@ export function mountAdminRoutes(
     return rows;
   }
 
-  router.get("/cleaners", (_req, res) => {
+  router.get("/cleaners", (req, res) => {
     const cleaners = Array.from(repo.users.values()).filter(
       (u) => u.role === "cleaning_crew",
     );
+    const fromIso =
+      typeof req.query.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)
+        ? req.query.from
+        : "";
+    const toIso =
+      typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)
+        ? req.query.to
+        : "";
+    const inRange = (wk: string) =>
+      (!fromIso || wk >= fromIso) && (!toIso || wk <= toIso);
     const jobsByCleaner = new Map<
       string,
       Array<import("../../domain/types.js").CleaningJob>
@@ -2545,7 +2701,9 @@ export function mountAdminRoutes(
       const profile = repo.cleaningCrewProfiles.get(c.id);
       const jobs = jobsByCleaner.get(c.id) ?? [];
       const payments = paymentsByCleaner.get(c.id) ?? [];
-      const weeklyRows = buildCleanerWeeklyRows(jobs, payments);
+      const weeklyRows = buildCleanerWeeklyRows(jobs, payments).filter((r) =>
+        inRange(r.weekStartIso),
+      );
       const lifetimeJobs = weeklyRows.reduce((s, r) => s + r.jobsCompleted, 0);
       const lifetimeEarned = weeklyRows.reduce((s, r) => s + r.earnedVnd, 0);
       const lifetimePaid = weeklyRows.reduce(
@@ -2603,7 +2761,8 @@ export function mountAdminRoutes(
     res.render("admin/cleaners", {
       title: "Cleaning crew",
       cleanerRows,
-      aggregateRows,
+      aggregateRows: aggregateRows.filter((r) => inRange(r.weekStartIso)),
+      filters: { from: fromIso, to: toIso },
       allCleaners: cleaners,
       bookingForJob: (j: { bookingId: string }) =>
         allBookings.find((b) => b.id === j.bookingId),
@@ -2883,6 +3042,39 @@ export function mountAdminRoutes(
       res.redirect("/admin/cleaners");
     },
   );
+
+  router.post("/cleaner-payments/:id/toggle", (req, res) => {
+    const p = repo.cleanerPayments.find((x) => x.id === req.params.id);
+    if (!p) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    p.status = p.status === "void" ? "paid" : "void";
+    audit(repo, req, {
+      action: "cleaner.payment_toggle",
+      entityType: "cleaner_payment",
+      entityId: p.id,
+      after: { status: p.status },
+    });
+    res.redirect("/admin/cleaners");
+  });
+
+  router.post("/cleaner-payments/:id/delete", (req, res) => {
+    const idx = repo.cleanerPayments.findIndex((x) => x.id === req.params.id);
+    if (idx < 0) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const before = repo.cleanerPayments[idx]!;
+    repo.cleanerPayments.splice(idx, 1);
+    audit(repo, req, {
+      action: "cleaner.payment_delete",
+      entityType: "cleaner_payment",
+      entityId: before.id,
+      before: before as unknown as Record<string, unknown>,
+    });
+    res.redirect("/admin/cleaners");
+  });
 
   router.get("/cleaners/:id/report.csv", (req, res) => {
     const u = repo.users.get(req.params.id as string);

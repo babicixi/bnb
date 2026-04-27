@@ -4,9 +4,29 @@
 <p class="muted-small">
   Commissions are calculated <strong>per booking</strong>. Percentage rules apply
   to the <em>net revenue after discount codes</em>; fixed rules pay a flat
-  amount per booking. Fixed rule values are entered in <strong>thousands of VND</strong>
-  (type <code>120</code> for ₫120,000).
+  amount per booking. Fixed rule values and discount-code values are entered in
+  <strong>thousands of VND</strong> (type <code>120</code> for ₫120,000).
 </p>
+
+<form method="get" action="/admin/agents" class="card" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+  <div style="flex:0 0 auto;">
+    <label>From week</label>
+    <input type="date" name="from" value="<%= filters.from %>" />
+  </div>
+  <div style="flex:0 0 auto;">
+    <label>To week</label>
+    <input type="date" name="to" value="<%= filters.to %>" />
+  </div>
+  <div style="flex:0 0 auto;">
+    <button type="submit">Apply range</button>
+    <% if (filters.from || filters.to) { %>
+      <a href="/admin/agents" class="btn secondary" style="margin-left:0.4rem;">Clear</a>
+    <% } %>
+  </div>
+  <div class="muted-small" style="flex:1 1 100%;">
+    Filters every weekly table on this page (top dashboard + each agent's history).
+  </div>
+</form>
 
 <div class="card">
   <h2>Weekly commission summary — all agents</h2>
@@ -132,11 +152,57 @@
         <h3>Discount codes</h3>
         <% if (row.discounts.length === 0) { %><p class="muted-small">None assigned.</p><% } %>
         <% row.discounts.forEach(function(d){ var used = countDiscountUsage(d.id); %>
-          <p>
-            <strong><%= d.name %></strong> — <%= d.discountType === 'percentage' ? d.value + '%' : formatVnd(d.value) %>
-            · used <%= used %><% if (d.usageLimit) { %>/<%= d.usageLimit %><% } %>
-            <span class="badge <%= d.isActive ? 'good' : '' %>"><%= d.isActive ? 'active' : 'inactive' %></span>
-          </p>
+          <details style="margin-bottom:0.4rem;">
+            <summary>
+              <strong><%= d.name %></strong> —
+              <%= d.discountType === 'percentage' ? d.value + '%' : formatVnd(d.value) %>
+              · used <%= used %><% if (d.usageLimit) { %>/<%= d.usageLimit %><% } %>
+              <span class="badge <%= d.isActive ? 'good' : 'bad' %>"><%= d.isActive ? 'active' : 'revoked' %></span>
+            </summary>
+            <form method="post" action="/admin/discounts/<%= d.id %>/edit" style="margin-top:0.4rem;">
+              <div class="grid cols-2">
+                <div><label>Name</label><input name="name" value="<%= d.name %>" required /></div>
+                <div>
+                  <label>Type</label>
+                  <select name="discountType">
+                    <option value="fixed" <%= d.discountType === 'fixed' ? 'selected' : '' %>>Fixed (₫'000)</option>
+                    <option value="percentage" <%= d.discountType === 'percentage' ? 'selected' : '' %>>Percentage</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Value <span class="muted-small">— <code>10</code> for 10% or <code>100</code> for ₫100,000</span></label>
+                  <input type="number" name="value" min="0" step="any" value="<%= d.discountType === 'fixed' ? d.value / 1000 : d.value %>" required />
+                </div>
+                <div>
+                  <label>Usage limit (blank = unlimited)</label>
+                  <input type="number" name="usageLimit" min="1" value="<%= d.usageLimit || '' %>" />
+                </div>
+                <div>
+                  <label>Valid from (optional)</label>
+                  <input type="date" name="validFrom" value="<%= d.validFrom || '' %>" />
+                </div>
+                <div>
+                  <label>Valid until (optional)</label>
+                  <input type="date" name="validUntil" value="<%= d.validUntil || '' %>" />
+                </div>
+              </div>
+              <p style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+                <button type="submit" class="secondary">Save changes</button>
+              </p>
+            </form>
+            <p style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+              <form method="post" action="/admin/discounts/<%= d.id %>/toggle" style="display:inline">
+                <button type="submit" class="secondary"><%= d.isActive ? 'Revoke' : 'Reactivate' %></button>
+              </form>
+              <% if (used === 0) { %>
+                <form method="post" action="/admin/discounts/<%= d.id %>/delete" style="display:inline" onsubmit="return confirm('Permanently delete discount code &quot;<%= d.name %>&quot;? Only allowed because it has not been used on any booking.')">
+                  <button type="submit" class="danger">Permanently delete</button>
+                </form>
+              <% } else { %>
+                <span class="muted-small">Cannot delete — used on <%= used %> booking(s); revoke instead.</span>
+              <% } %>
+            </p>
+          </details>
         <% }) %>
         <details>
           <summary>+ Assign a new discount code</summary>
@@ -146,12 +212,13 @@
               <div>
                 <label>Type</label>
                 <select name="discountType">
-                  <option value="fixed">Fixed (₫)</option>
+                  <option value="fixed">Fixed (₫'000)</option>
                   <option value="percentage">Percentage</option>
                 </select>
               </div>
               <div>
-                <label>Value</label><input type="number" name="value" min="0" step="500" required />
+                <label>Value <span class="muted-small">— <code>10</code> for 10% or <code>100</code> for ₫100,000</span></label>
+                <input type="number" name="value" min="0" step="any" required />
               </div>
               <div>
                 <label>Usage limit (blank = unlimited)</label>
@@ -204,14 +271,25 @@
                   <% if (w.payments.length === 0) { %>
                     <span class="muted-small">—</span>
                   <% } else { %>
-                    <% w.payments.forEach(function(p){ %>
-                      <% if (p.screenshotUrl) { %>
-                        <a href="<%= p.screenshotUrl %>" target="_blank" title="<%= formatVnd(p.amountVnd) %> · <%= formatDateTime(p.paidAt) %><% if (p.notes) { %> · <%= p.notes %><% } %>">
-                          <img src="<%= p.screenshotUrl %>" alt="proof" style="height:36px; vertical-align:middle; border:1px solid var(--border); border-radius:3px;" />
-                        </a>
-                      <% } else { %>
-                        <span class="muted-small" title="<%= formatDateTime(p.paidAt) %>"><%= formatVnd(p.amountVnd) %> (no image)</span>
-                      <% } %>
+                    <% w.payments.forEach(function(p){
+                         var isVoid = p.status === 'void';
+                    %>
+                      <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.2rem; <%= isVoid ? 'opacity:0.5;' : '' %>">
+                        <% if (p.screenshotUrl) { %>
+                          <a href="<%= p.screenshotUrl %>" target="_blank" title="<%= formatVnd(p.amountVnd) %> · <%= formatDateTime(p.paidAt) %><% if (p.notes) { %> · <%= p.notes %><% } %>">
+                            <img src="<%= p.screenshotUrl %>" alt="proof" style="height:36px; vertical-align:middle; border:1px solid var(--border); border-radius:3px;" />
+                          </a>
+                        <% } else { %>
+                          <span class="muted-small" title="<%= formatDateTime(p.paidAt) %>"><%= formatVnd(p.amountVnd) %></span>
+                        <% } %>
+                        <span class="badge <%= isVoid ? 'bad' : 'good' %>"><%= isVoid ? 'voided' : 'paid' %></span>
+                        <form method="post" action="/admin/agent-payments/<%= p.id %>/toggle" style="display:inline">
+                          <button type="submit" class="secondary" style="padding:0.15rem 0.5rem; font-size:0.78rem;"><%= isVoid ? 'Mark paid' : 'Mark unpaid' %></button>
+                        </form>
+                        <form method="post" action="/admin/agent-payments/<%= p.id %>/delete" style="display:inline" onsubmit="return confirm('Delete this payment record? Cannot be undone.')">
+                          <button type="submit" class="danger" style="padding:0.15rem 0.5rem; font-size:0.78rem;">×</button>
+                        </form>
+                      </div>
                     <% }) %>
                   <% } %>
                 </td>

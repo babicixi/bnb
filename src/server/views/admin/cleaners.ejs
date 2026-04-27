@@ -7,6 +7,26 @@
   (type <code>120</code> for ₫120,000 per job).
 </p>
 
+<form method="get" action="/admin/cleaners" class="card" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+  <div style="flex:0 0 auto;">
+    <label>From week</label>
+    <input type="date" name="from" value="<%= filters.from %>" />
+  </div>
+  <div style="flex:0 0 auto;">
+    <label>To week</label>
+    <input type="date" name="to" value="<%= filters.to %>" />
+  </div>
+  <div style="flex:0 0 auto;">
+    <button type="submit">Apply range</button>
+    <% if (filters.from || filters.to) { %>
+      <a href="/admin/cleaners" class="btn secondary" style="margin-left:0.4rem;">Clear</a>
+    <% } %>
+  </div>
+  <div class="muted-small" style="flex:1 1 100%;">
+    Filters every weekly table on this page (top dashboard + each cleaner's history).
+  </div>
+</form>
+
 <div class="card">
   <h2>Weekly payroll summary — all cleaners</h2>
   <% if (aggregateRows.length === 0) { %>
@@ -172,14 +192,25 @@
                   <% if (w.payments.length === 0) { %>
                     <span class="muted-small">—</span>
                   <% } else { %>
-                    <% w.payments.forEach(function(p){ %>
-                      <% if (p.screenshotUrl) { %>
-                        <a href="<%= p.screenshotUrl %>" target="_blank" title="<%= formatVnd(p.amountVnd) %> · <%= p.jobsCount %> jobs · <%= formatDateTime(p.paidAt) %><% if (p.notes) { %> · <%= p.notes %><% } %>">
-                          <img src="<%= p.screenshotUrl %>" alt="proof" style="height:36px; vertical-align:middle; border:1px solid var(--border); border-radius:3px;" />
-                        </a>
-                      <% } else { %>
-                        <span class="muted-small" title="<%= formatDateTime(p.paidAt) %>"><%= formatVnd(p.amountVnd) %> (no image)</span>
-                      <% } %>
+                    <% w.payments.forEach(function(p){
+                         var isVoid = p.status === 'void';
+                    %>
+                      <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.2rem; <%= isVoid ? 'opacity:0.5;' : '' %>">
+                        <% if (p.screenshotUrl) { %>
+                          <a href="<%= p.screenshotUrl %>" target="_blank" title="<%= formatVnd(p.amountVnd) %> · <%= p.jobsCount %> jobs · <%= formatDateTime(p.paidAt) %><% if (p.notes) { %> · <%= p.notes %><% } %>">
+                            <img src="<%= p.screenshotUrl %>" alt="proof" style="height:36px; vertical-align:middle; border:1px solid var(--border); border-radius:3px;" />
+                          </a>
+                        <% } else { %>
+                          <span class="muted-small" title="<%= formatDateTime(p.paidAt) %>"><%= formatVnd(p.amountVnd) %></span>
+                        <% } %>
+                        <span class="badge <%= isVoid ? 'bad' : 'good' %>"><%= isVoid ? 'voided' : 'paid' %></span>
+                        <form method="post" action="/admin/cleaner-payments/<%= p.id %>/toggle" style="display:inline">
+                          <button type="submit" class="secondary" style="padding:0.15rem 0.5rem; font-size:0.78rem;"><%= isVoid ? 'Mark paid' : 'Mark unpaid' %></button>
+                        </form>
+                        <form method="post" action="/admin/cleaner-payments/<%= p.id %>/delete" style="display:inline" onsubmit="return confirm('Delete this payment record? Cannot be undone.')">
+                          <button type="submit" class="danger" style="padding:0.15rem 0.5rem; font-size:0.78rem;">×</button>
+                        </form>
+                      </div>
                     <% }) %>
                   <% } %>
                 </td>

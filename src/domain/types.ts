@@ -152,11 +152,14 @@ export interface Booking {
   discountIdApplied?: Id;
 }
 
+export type PayoutStatus = "paid" | "void";
+
 export interface AgentCommissionPayment {
   id: Id;
   salesAgentId: Id;
   weekStartIso: string; // YYYY-MM-DD (Monday)
   amountVnd: number;
+  status?: PayoutStatus; // defaults to "paid" — voided rows do not count toward paid total
   screenshotUrl?: string;
   paidAt: Date;
   notes?: string;
@@ -169,6 +172,7 @@ export interface CleanerPayrollPayment {
   weekStartIso: string; // YYYY-MM-DD (Monday)
   jobsCount: number;
   amountVnd: number;
+  status?: PayoutStatus; // defaults to "paid"
   screenshotUrl?: string;
   paidAt: Date;
   notes?: string;
