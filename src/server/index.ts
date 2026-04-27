@@ -10,11 +10,14 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 
 const port = Number(process.env.PORT ?? 3000);
 const sessionSecret = process.env.SESSION_SECRET ?? "dev-secret-change-me";
+const persistencePath =
+  process.env.STATE_FILE ?? path.join(projectRoot, "data", "state.json");
 
 const { app, demoCredentials } = createApp({
   uploadsDir,
   sessionSecret,
   startSweepTimer: true,
+  persistencePath,
 });
 
 app.listen(port, () => {

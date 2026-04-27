@@ -3,7 +3,12 @@ import session from "express-session";
 import cookieParser from "cookie-parser";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRepository, seedRepository } from "../repo/index.js";
+import {
+  createRepository,
+  loadRepoInPlace,
+  saveRepoSync,
+  seedRepository,
+} from "../repo/index.js";
 import type { Repository } from "../repo/memory.js";
 import { attachCurrentUser } from "./middleware/auth.js";
 import { attachLocaleAndHelpers } from "./renderHelpers.js";
@@ -27,6 +32,12 @@ export interface CreateAppOptions {
   uploadsDir?: string;
   startSweepTimer?: boolean;
   sweepIntervalMs?: number;
+  /**
+   * If set, the repo state is loaded from this file on boot (replacing
+   * the seed when present) and written back after every successful
+   * non-GET response. Tests can omit this to keep state ephemeral.
+   */
+  persistencePath?: string;
 }
 
 export function createApp(opts: CreateAppOptions = {}): {
@@ -35,9 +46,19 @@ export function createApp(opts: CreateAppOptions = {}): {
   uploadsDir: string;
   demoCredentials: ReturnType<typeof seedRepository>;
   sweepTimer?: NodeJS.Timeout;
+  persistencePath?: string;
 } {
   const repo = opts.repository ?? createRepository();
+  // Always derive credentials from the demo seed so console output stays
+  // useful, but only apply seed mutations on first boot. If a saved snapshot
+  // exists, it wins (any later edits/additions are restored).
   const demoCredentials = seedRepository(repo);
+  if (opts.persistencePath) {
+    const loaded = loadRepoInPlace(repo, opts.persistencePath);
+    if (loaded) {
+      console.log(`▶ loaded saved state from ${opts.persistencePath}`);
+    }
+  }
   const uploadsDir = opts.uploadsDir ?? path.join(projectRoot, "uploads");
 
   const app = express();
@@ -58,6 +79,26 @@ export function createApp(opts: CreateAppOptions = {}): {
   app.use("/uploads", express.static(uploadsDir));
   app.use(attachCurrentUser((id) => repo.users.get(id)));
   app.use(attachLocaleAndHelpers);
+
+  // Persist the repo after every successful state-mutating response.
+  if (opts.persistencePath) {
+    const persistencePath = opts.persistencePath;
+    app.use((req, res, next) => {
+      if (req.method === "GET" || req.method === "HEAD") {
+        next();
+        return;
+      }
+      res.on("finish", () => {
+        if (res.statusCode >= 400) return;
+        try {
+          saveRepoSync(repo, persistencePath);
+        } catch (err) {
+          console.error("[persist] save failed:", err);
+        }
+      });
+      next();
+    });
+  }
 
   mountAuthRoutes(app, repo);
   mountPublicRoutes(app, repo);
@@ -181,5 +222,12 @@ export function createApp(opts: CreateAppOptions = {}): {
     sweepTimer.unref?.();
   }
 
-  return { app, repo, uploadsDir, demoCredentials, sweepTimer };
+  return {
+    app,
+    repo,
+    uploadsDir,
+    demoCredentials,
+    sweepTimer,
+    persistencePath: opts.persistencePath,
+  };
 }

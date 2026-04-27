@@ -132,6 +132,12 @@ tr:hover td { background: #fafaf2; }
   background: #fafafa;
   color: var(--accent);
 }
+.admin-tab-home {
+  background: #1a1a1a;
+  color: #fff;
+  font-weight: 600;
+}
+.admin-tab-home:hover { background: #333; }
 
 /* View toggle (table | calendar) */
 .view-toggle {
@@ -233,6 +239,87 @@ tr:hover td { background: #fafaf2; }
 .calendar-legend { padding: 0.5rem 1rem; font-size: 0.78rem; color: var(--muted); border-top: 1px solid var(--border); }
 .calendar-legend .swatch { display: inline-block; width: 12px; height: 12px; vertical-align: middle; margin: 0 4px 0 8px; border-radius: 3px; }
 .calendar-legend .maintenance-swatch { background: repeating-linear-gradient(135deg, #ccc 0, #ccc 3px, #eee 3px, #eee 6px); }
+
+/* Today highlights inside the week calendar */
+.cal-day-strip .col-head.today { background: #e8f3ff; color: #1f5fa3; box-shadow: inset 0 -3px 0 #1f5fa3; }
+.cal-room-row .day-cell.today { background: #f4faff; }
+
+/* Traditional Sun-Sat month grid */
+.month {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.month-dow-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: #fafafa;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.month-dow {
+  padding: 0.5rem 0.75rem;
+  text-align: center;
+  border-right: 1px solid var(--border);
+}
+.month-dow:last-child { border-right: 0; }
+.month-dow.weekend { color: var(--muted); }
+
+.month-week {
+  border-bottom: 1px solid var(--border);
+  min-height: 110px;
+  font-size: 0.78rem;
+  position: relative;
+}
+.month-week:last-child { border-bottom: 0; }
+
+.month-cell {
+  border-right: 1px solid #f0f0f0;
+  padding: 4px 6px 4px;
+  position: relative;
+  background: #fff;
+  z-index: 0;
+}
+.month-cell:last-child { border-right: 0; }
+.month-cell.weekend { background: #fafaf2; }
+.month-cell.outside { background: #f5f5f3; color: #aaa; }
+.month-cell.today { background: #e8f3ff; box-shadow: inset 0 0 0 2px #1f5fa3; }
+.month-cell .day-num {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--fg);
+  margin-bottom: 2px;
+}
+.month-cell.outside .day-num { color: #aaa; }
+
+.month-bar {
+  align-self: stretch;
+  margin: 1px 2px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #777;
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 1;
+  position: relative;
+  font-size: 0.74rem;
+}
+.month-bar:hover { filter: brightness(1.15); }
+.month-bar.confirmed { background: #2a7a3a; }
+.month-bar.pending_payment { background: #b58700; }
+.month-bar.checked_in { background: #1f5fa3; }
+.month-bar.checked_out { background: #6b6b6b; }
+.month-bar.cleaning_assigned, .month-bar.cleaning_in_progress { background: #a06226; }
+.month-bar.cleaned, .month-bar.closed { background: #6e6e6e; }
+.month-bar.cancellation_requested,
+.month-bar.refund_pending,
+.month-bar.extra_payment_required { background: #b03030; }
 
 /* Video embed (YouTube/Vimeo/Drive) */
 .vid-embed {

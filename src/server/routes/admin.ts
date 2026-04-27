@@ -51,10 +51,277 @@ const filterSchema = z.object({
   buildingId: z.string().optional(),
   roomId: z.string().optional(),
   agentId: z.string().optional(),
-  view: z.enum(["table", "calendar"]).optional(),
-  cal: z.string().optional(), // anchor month for calendar, YYYY-MM
+  view: z.enum(["table", "week", "month"]).optional(),
+  cal: z.string().optional(), // anchor date YYYY-MM-DD (week mode) or YYYY-MM (month mode)
 });
 
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function startOfWeekSunday(d: Date): Date {
+  // Snap to the Sunday on or before d (UTC).
+  const day = d.getUTCDay(); // 0=Sun..6=Sat
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day),
+  );
+}
+
+function buildWeekView(input: {
+  bookings: Array<import("../../domain/types.js").Booking>;
+  guests: Map<string, import("../../domain/types.js").Guest>;
+  rooms: Array<import("../../domain/types.js").Room>;
+  maintenance: Array<import("../../domain/types.js").MaintenanceBlock>;
+  filters: Record<string, string | undefined>;
+  anchorDate?: string;
+}) {
+  const now = new Date();
+  let anchor: Date;
+  if (input.anchorDate && /^\d{4}-\d{2}-\d{2}$/.test(input.anchorDate)) {
+    anchor = new Date(`${input.anchorDate}T00:00:00Z`);
+  } else {
+    anchor = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+  }
+  const weekStart = startOfWeekSunday(anchor);
+  const weekEnd = new Date(weekStart.getTime() + 7 * 86_400_000);
+
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart.getTime() + i * 86_400_000);
+    const dow = d.getUTCDay();
+    days.push({
+      iso: isoDate(d),
+      day: d.getUTCDate(),
+      dow: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dow],
+      month: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()],
+      isWeekend: dow === 0 || dow === 6,
+      isToday: isoDate(d) === isoDate(now),
+      label: isoDate(d),
+    });
+  }
+
+  type Bar = {
+    booking: import("../../domain/types.js").Booking;
+    guestName: string;
+    colStart: number;
+    colSpan: number;
+  };
+  type MaintBar = {
+    block: import("../../domain/types.js").MaintenanceBlock;
+    colStart: number;
+    colSpan: number;
+  };
+  const barsByRoom: Record<string, Bar[]> = {};
+  const maintBarsByRoom: Record<string, MaintBar[]> = {};
+
+  function colsFor(start: Date, end: Date): { colStart: number; colSpan: number } | null {
+    if (end <= weekStart || start >= weekEnd) return null;
+    const dayOf = (d: Date) =>
+      new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const startDay = dayOf(start < weekStart ? weekStart : start);
+    let lastDay: Date;
+    if (end >= weekEnd) {
+      lastDay = new Date(weekEnd.getTime() - 86_400_000);
+    } else {
+      const endDayOnly = dayOf(end);
+      if (end.getTime() === endDayOnly.getTime()) {
+        lastDay = new Date(endDayOnly.getTime() - 86_400_000);
+      } else {
+        lastDay = endDayOnly;
+      }
+    }
+    const colStart =
+      Math.round((startDay.getTime() - weekStart.getTime()) / 86_400_000) + 1;
+    const lastCol =
+      Math.round((lastDay.getTime() - weekStart.getTime()) / 86_400_000) + 1;
+    const colSpan = lastCol - colStart + 1;
+    if (colSpan < 1) return null;
+    return { colStart, colSpan };
+  }
+
+  for (const b of input.bookings) {
+    if (b.status === "cancelled" || b.status === "held") continue;
+    const cols = colsFor(b.checkInAt, b.checkOutAt);
+    if (!cols) continue;
+    const guest = input.guests.get(b.guestId);
+    (barsByRoom[b.roomId] ??= []).push({
+      booking: b,
+      guestName: guest ? guest.fullName : "—",
+      ...cols,
+    });
+  }
+  for (const list of Object.values(barsByRoom)) {
+    list.sort((a, b) => a.colStart - b.colStart);
+  }
+  for (const m of input.maintenance) {
+    const cols = colsFor(m.startsAt, m.endsAt);
+    if (!cols) continue;
+    (maintBarsByRoom[m.roomId] ??= []).push({ block: m, ...cols });
+  }
+
+  function buildQuery(anchorIso: string): string {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(input.filters)) {
+      if (v && k !== "view" && k !== "cal") params.set(k, v);
+    }
+    params.set("view", "week");
+    params.set("cal", anchorIso);
+    return params.toString();
+  }
+  const prevAnchor = isoDate(new Date(weekStart.getTime() - 7 * 86_400_000));
+  const nextAnchor = isoDate(new Date(weekStart.getTime() + 7 * 86_400_000));
+  const todayAnchor = isoDate(now);
+  const label =
+    `${days[0]!.month} ${days[0]!.day} – ${days[6]!.month} ${days[6]!.day}, ${weekStart.getUTCFullYear()}`;
+
+  return {
+    days,
+    barsByRoom,
+    maintBarsByRoom,
+    label,
+    prevQuery: buildQuery(prevAnchor),
+    nextQuery: buildQuery(nextAnchor),
+    todayQuery: buildQuery(todayAnchor),
+  };
+}
+
+function buildMonthGrid(input: {
+  bookings: Array<import("../../domain/types.js").Booking>;
+  guests: Map<string, import("../../domain/types.js").Guest>;
+  rooms: Map<string, import("../../domain/types.js").Room>;
+  maintenance: Array<import("../../domain/types.js").MaintenanceBlock>;
+  filters: Record<string, string | undefined>;
+  anchorMonth?: string;
+}) {
+  const now = new Date();
+  let year: number;
+  let month: number;
+  if (input.anchorMonth && /^\d{4}-\d{2}$/.test(input.anchorMonth)) {
+    const parts = input.anchorMonth.split("-").map(Number);
+    year = parts[0]!;
+    month = parts[1]! - 1;
+  } else {
+    year = now.getUTCFullYear();
+    month = now.getUTCMonth();
+  }
+  const firstOfMonth = new Date(Date.UTC(year, month, 1));
+  const nextMonth = new Date(Date.UTC(year, month + 1, 1));
+  const gridStart = startOfWeekSunday(firstOfMonth);
+  // Always 6 weeks tall so the grid is a stable rectangle.
+  const totalDays = 42;
+
+  const allDays = [];
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(gridStart.getTime() + i * 86_400_000);
+    allDays.push({
+      iso: isoDate(d),
+      day: d.getUTCDate(),
+      isOutside: d < firstOfMonth || d >= nextMonth,
+      isToday: isoDate(d) === isoDate(now),
+      isWeekend: d.getUTCDay() === 0 || d.getUTCDay() === 6,
+    });
+  }
+  const weeks: Array<typeof allDays> = [];
+  for (let w = 0; w < 6; w++) {
+    weeks.push(allDays.slice(w * 7, w * 7 + 7));
+  }
+
+  // Per-week bars with lane assignment so overlapping bookings stack.
+  type WeekBar = {
+    booking: import("../../domain/types.js").Booking;
+    guestName: string;
+    roomName: string;
+    colStart: number;
+    colSpan: number;
+    lane: number;
+  };
+  const barsByWeek: WeekBar[][] = [];
+  for (let w = 0; w < weeks.length; w++) {
+    const week = weeks[w]!;
+    const wkStart = new Date(`${week[0]!.iso}T00:00:00Z`);
+    const wkEnd = new Date(wkStart.getTime() + 7 * 86_400_000);
+
+    const collected: Omit<WeekBar, "lane">[] = [];
+    for (const b of input.bookings) {
+      if (b.status === "cancelled" || b.status === "held") continue;
+      if (b.checkOutAt <= wkStart || b.checkInAt >= wkEnd) continue;
+      const start = b.checkInAt < wkStart ? wkStart : b.checkInAt;
+      const startIso = isoDate(start);
+      const endExclusive = b.checkOutAt > wkEnd ? wkEnd : b.checkOutAt;
+      const endDay = new Date(
+        Date.UTC(
+          endExclusive.getUTCFullYear(),
+          endExclusive.getUTCMonth(),
+          endExclusive.getUTCDate(),
+        ),
+      );
+      const lastIso =
+        endExclusive.getTime() === endDay.getTime()
+          ? isoDate(new Date(endDay.getTime() - 86_400_000))
+          : isoDate(endDay);
+      const colStart = week.findIndex((d) => d.iso === startIso) + 1;
+      const lastCol = week.findIndex((d) => d.iso === lastIso) + 1;
+      if (colStart < 1 || lastCol < 1) continue;
+      const colSpan = lastCol - colStart + 1;
+      const guest = input.guests.get(b.guestId);
+      const room = input.rooms.get(b.roomId);
+      collected.push({
+        booking: b,
+        guestName: guest ? guest.fullName : "—",
+        roomName: room ? room.name : b.roomId,
+        colStart,
+        colSpan,
+      });
+    }
+    collected.sort(
+      (a, b) => a.colStart - b.colStart || b.colSpan - a.colSpan,
+    );
+    const laneEnds: number[] = [];
+    const placed: WeekBar[] = collected.map((bar) => {
+      let lane = 0;
+      while (lane < laneEnds.length && (laneEnds[lane] ?? 0) > bar.colStart) {
+        lane++;
+      }
+      laneEnds[lane] = bar.colStart + bar.colSpan;
+      return { ...bar, lane };
+    });
+    barsByWeek.push(placed);
+  }
+
+  function buildQuery(anchorYm: string): string {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(input.filters)) {
+      if (v && k !== "view" && k !== "cal") params.set(k, v);
+    }
+    params.set("view", "month");
+    params.set("cal", anchorYm);
+    return params.toString();
+  }
+  const prevDate = new Date(Date.UTC(year, month - 1, 1));
+  const nextDate = new Date(Date.UTC(year, month + 1, 1));
+  const ym = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  const label = firstOfMonth.toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+  return {
+    weeks,
+    barsByWeek,
+    label,
+    prevQuery: buildQuery(ym(prevDate)),
+    nextQuery: buildQuery(ym(nextDate)),
+    todayQuery: buildQuery(ym(now)),
+  };
+}
+
+// Legacy month-rooms-grid builder, kept around for reference but unused now
+// that buildWeekView and buildMonthGrid cover the supported views.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function buildCalendar(input: {
   bookings: Array<import("../../domain/types.js").Booking>;
   guests: Map<string, import("../../domain/types.js").Guest>;
@@ -274,7 +541,12 @@ export function mountAdminRoutes(
       : filters.buildingId
         ? allRooms.filter((r) => r.buildingId === filters.buildingId)
         : allRooms;
-    const view = filters.view === "calendar" ? "calendar" : "table";
+    const view: "table" | "week" | "month" =
+      filters.view === "table"
+        ? "table"
+        : filters.view === "month"
+          ? "month"
+          : "week";
 
     const cleaningJobsByBookingId = new Map<
       string,
@@ -284,17 +556,31 @@ export function mountAdminRoutes(
       cleaningJobsByBookingId.set(j.bookingId, j);
     }
 
+    const filteredBookingsForCal = Array.from(repo.bookings.values()).filter(
+      (b) =>
+        (!filters.roomId || b.roomId === filters.roomId) &&
+        (!filters.buildingId ||
+          calendarRooms.some((r) => r.id === b.roomId)),
+    );
+
     const calendar =
-      view === "calendar"
-        ? buildCalendar({
-            bookings: Array.from(repo.bookings.values()).filter(
-              (b) =>
-                (!filters.roomId || b.roomId === filters.roomId) &&
-                (!filters.buildingId ||
-                  calendarRooms.some((r) => r.id === b.roomId)),
-            ),
+      view === "week"
+        ? buildWeekView({
+            bookings: filteredBookingsForCal,
             guests: repo.guests,
             rooms: calendarRooms,
+            maintenance: repo.maintenanceBlocks,
+            filters: filters as Record<string, string | undefined>,
+            anchorDate: filters.cal,
+          })
+        : null;
+
+    const monthGrid =
+      view === "month"
+        ? buildMonthGrid({
+            bookings: filteredBookingsForCal,
+            guests: repo.guests,
+            rooms: repo.rooms,
             maintenance: repo.maintenanceBlocks,
             filters: filters as Record<string, string | undefined>,
             anchorMonth: filters.cal,
@@ -305,6 +591,7 @@ export function mountAdminRoutes(
       title: "Admin dashboard",
       bookings,
       rooms: allRooms,
+      calendarRooms,
       buildings: Array.from(repo.buildings.values()),
       agents: Array.from(repo.users.values()).filter(
         (u) => u.role === "sales_agent",
@@ -313,6 +600,7 @@ export function mountAdminRoutes(
       filters,
       view,
       calendar,
+      monthGrid,
       guestForBooking: (b: { guestId: string }) => repo.guests.get(b.guestId),
       roomForBooking: (b: { roomId: string }) => repo.rooms.get(b.roomId),
       cleaningJobForBooking: (b: { id: string }) =>

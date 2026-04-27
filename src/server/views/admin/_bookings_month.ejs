@@ -1,0 +1,47 @@
+<div class="month">
+  <div class="calendar-header">
+    <a class="btn secondary" href="?<%= monthGrid.prevQuery %>">‹ Prev month</a>
+    <h2><%= monthGrid.label %></h2>
+    <span>
+      <a class="btn secondary" href="?<%= monthGrid.todayQuery %>">This month</a>
+      <a class="btn secondary" href="?<%= monthGrid.nextQuery %>">Next month ›</a>
+    </span>
+  </div>
+
+  <div class="month-dow-strip">
+    <% ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(name, i){ %>
+      <div class="month-dow <%= (i === 0 || i === 6) ? 'weekend' : '' %>"><%= name %></div>
+    <% }) %>
+  </div>
+
+  <% monthGrid.weeks.forEach(function(week, wi){
+       var bars = monthGrid.barsByWeek[wi] || [];
+       var maxLane = bars.reduce(function(m, b){ return Math.max(m, b.lane); }, -1);
+       var totalRows = Math.max(1, maxLane + 2); // 1 header + N bars
+  %>
+    <div class="month-week" style="display:grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: 22px repeat(<%= maxLane + 1 %>, 22px) 1fr;">
+      <% week.forEach(function(d, ci){ %>
+        <div class="month-cell <%= d.isWeekend ? 'weekend' : '' %> <%= d.isOutside ? 'outside' : '' %> <%= d.isToday ? 'today' : '' %>"
+             style="grid-column: <%= ci + 1 %>; grid-row: 1 / -1;">
+          <span class="day-num"><%= d.day %></span>
+        </div>
+      <% }) %>
+      <% bars.forEach(function(bar){ %>
+        <a class="month-bar <%= bar.booking.status %>"
+           href="/admin/bookings/<%= bar.booking.id %>"
+           style="grid-column: <%= bar.colStart %> / span <%= bar.colSpan %>; grid-row: <%= bar.lane + 2 %>;"
+           title="<%= bar.booking.bookingNumber %> · <%= bar.roomName %> · <%= bar.guestName %> · <%= formatDateTime(bar.booking.checkInAt) %> → <%= formatDateTime(bar.booking.checkOutAt) %>">
+          <strong><%= bar.roomName %></strong>: <%= bar.guestName %>
+        </a>
+      <% }) %>
+    </div>
+  <% }) %>
+
+  <div class="calendar-legend">
+    <span class="swatch" style="background:#2a7a3a"></span>confirmed
+    <span class="swatch" style="background:#b58700"></span>pending payment
+    <span class="swatch" style="background:#1f5fa3"></span>checked-in
+    <span class="swatch" style="background:#a06226"></span>cleaning
+    <span class="swatch" style="background:#b03030"></span>action required
+  </div>
+</div>

@@ -15,6 +15,7 @@
   const path = (typeof currentPath !== 'undefined' && currentPath) ? currentPath : '/admin';
 %>
 <nav class="admin-tabs">
+  <a href="/admin" class="admin-tab admin-tab-home" title="Back to main dashboard">← Dashboard</a>
   <% tabs.forEach(function(tab){ %>
     <a href="<%= tab.href %>" class="admin-tab <%= tab.match.test(path) ? 'active' : '' %>"><%= tab.label %></a>
   <% }) %>

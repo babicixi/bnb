@@ -1,11 +1,22 @@
 <%- include('../_header') %>
 <%- include('_nav') %>
 
-<h1 style="display:flex; align-items:center; gap:1rem;">
+<%
+  function viewQuery(v) {
+    var p = new URLSearchParams();
+    Object.entries(filters).forEach(function(kv){
+      if (kv[1] && kv[0] !== 'view' && kv[0] !== 'cal') p.set(kv[0], kv[1]);
+    });
+    p.set('view', v);
+    return p.toString();
+  }
+%>
+<h1 style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
   Bookings
   <span class="view-toggle">
-    <a href="/admin?<%= new URLSearchParams({ ...filters, view: 'table' }).toString() %>" class="<%= view !== 'calendar' ? 'active' : '' %>">Table</a>
-    <a href="/admin?<%= new URLSearchParams({ ...filters, view: 'calendar' }).toString() %>" class="<%= view === 'calendar' ? 'active' : '' %>">Calendar</a>
+    <a href="/admin?<%= viewQuery('week') %>" class="<%= view === 'week' ? 'active' : '' %>">Week</a>
+    <a href="/admin?<%= viewQuery('month') %>" class="<%= view === 'month' ? 'active' : '' %>">Month</a>
+    <a href="/admin?<%= viewQuery('table') %>" class="<%= view === 'table' ? 'active' : '' %>">Table</a>
   </span>
 </h1>
 
@@ -75,8 +86,10 @@
   <p><button type="submit">Filter</button></p>
 </form>
 
-<% if (view === 'calendar') { %>
-  <%- include('_bookings_calendar', { calendar, rooms, formatVnd, formatDateTime }) %>
+<% if (view === 'week') { %>
+  <%- include('_bookings_calendar', { calendar, rooms: calendarRooms, formatVnd, formatDateTime }) %>
+<% } else if (view === 'month') { %>
+  <%- include('_bookings_month', { monthGrid, formatVnd, formatDateTime }) %>
 <% } else { %>
   <table>
     <thead>

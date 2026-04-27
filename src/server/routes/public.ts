@@ -36,19 +36,24 @@ export function mountPublicRoutes(app: Express, repo: Repository): void {
 
   router.post("/lookup", (req, res) => {
     const number = String(req.body.bookingNumber ?? "").trim();
-    const phone = String(req.body.phone ?? "").trim();
-    if (!number || !phone) {
+    const contact = String(req.body.contact ?? "").trim();
+    if (!number || !contact) {
       res.status(400).render("lookup", {
         title: "Find my booking",
         booking: null,
-        error: "Booking number and phone are required.",
+        error: "Booking number and your phone or email are required.",
       });
       return;
     }
     const id = repo.bookingsByNumber.get(number);
     const booking = id ? repo.bookings.get(id) : undefined;
     const guest = booking ? repo.guests.get(booking.guestId) : undefined;
-    if (!booking || !guest || guest.phone !== phone) {
+    const contactLower = contact.toLowerCase();
+    const matches =
+      guest &&
+      (guest.phone === contact ||
+        (guest.email && guest.email.toLowerCase() === contactLower));
+    if (!booking || !matches) {
       res.render("lookup", {
         title: "Find my booking",
         booking: null,

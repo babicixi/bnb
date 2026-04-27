@@ -4,9 +4,9 @@
   <% if (error) { %><p class="error"><%= error %></p><% } %>
   <form method="post" action="/lookup">
     <label>Booking number</label>
-    <input type="text" name="bookingNumber" required />
-    <label>Phone (as entered when booking)</label>
-    <input type="tel" name="phone" required />
+    <input type="text" name="bookingNumber" required placeholder="e.g. BNB-20260427-0001" />
+    <label>Phone or email (whichever you used when booking)</label>
+    <input type="text" name="contact" required placeholder="+84... or you@example.com" />
     <p><button type="submit">Look up</button></p>
   </form>
 </div>
