@@ -46,6 +46,19 @@
     </h2>
     <p class="muted-small"><%= row.cleaner.email %><% if (row.cleaner.phone) { %> · <%= row.cleaner.phone %><% } %></p>
 
+    <details style="margin-bottom: 0.75rem;">
+      <summary><span class="badge">Edit profile</span></summary>
+      <form method="post" action="/admin/cleaners/<%= row.cleaner.id %>/edit">
+        <div class="grid cols-2">
+          <div><label>Full name</label><input name="fullName" value="<%= row.cleaner.fullName %>" required /></div>
+          <div><label>Email</label><input type="email" name="email" value="<%= row.cleaner.email %>" required /></div>
+          <div><label>Phone</label><input name="phone" value="<%= row.cleaner.phone || '' %>" /></div>
+          <div><label>New password (leave blank to keep current)</label><input type="text" name="password" autocomplete="new-password" /></div>
+        </div>
+        <p><button type="submit">Save profile</button></p>
+      </form>
+    </details>
+
     <div class="grid cols-2">
       <div>
         <h3>Pay rate</h3>

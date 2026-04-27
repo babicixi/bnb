@@ -5,20 +5,25 @@
 
 <div class="card">
   <h2>Buildings</h2>
-  <table>
-    <thead><tr><th>Name</th><th>Address</th><th>City</th><th>District</th></tr></thead>
-    <tbody>
-      <% if (buildings.length === 0) { %><tr><td colspan="4" class="muted">No buildings yet.</td></tr><% } %>
-      <% buildings.forEach(function(b){ %>
-        <tr>
-          <td><strong><%= b.name %></strong></td>
-          <td><%= b.address %></td>
-          <td><%= b.city %></td>
-          <td><%= b.district || '—' %></td>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
+  <% if (buildings.length === 0) { %><p class="muted">No buildings yet.</p><% } %>
+  <% buildings.forEach(function(b){ %>
+    <details style="margin-bottom: 0.5rem; border:1px solid var(--border); border-radius:6px; padding: 0.5rem 0.75rem;">
+      <summary>
+        <strong><%= b.name %></strong>
+        <span class="muted-small">·  <%= b.address %> · <%= b.city %><% if (b.district) { %> · <%= b.district %><% } %></span>
+        <span class="badge" style="margin-left:0.5rem;">Edit</span>
+      </summary>
+      <form method="post" action="/admin/properties/buildings/<%= b.id %>">
+        <div class="grid cols-2">
+          <div><label>Name</label><input name="name" value="<%= b.name %>" required /></div>
+          <div><label>Address</label><input name="address" value="<%= b.address %>" required /></div>
+          <div><label>City</label><input name="city" value="<%= b.city %>" required /></div>
+          <div><label>District</label><input name="district" value="<%= b.district || '' %>" /></div>
+        </div>
+        <p><button type="submit">Save building</button></p>
+      </form>
+    </details>
+  <% }) %>
   <details>
     <summary>+ Add a building</summary>
     <form method="post" action="/admin/properties/buildings">
@@ -43,6 +48,7 @@
           <%= formatVnd(r.baseDayRateVnd) %>/day ·
           <%= r.isActive ? 'active' : 'inactive' %>
         </span>
+        <span class="badge" style="margin-left:0.5rem;">Edit</span>
       </summary>
       <form method="post" action="/admin/properties/rooms/<%= r.id %>">
         <div class="grid cols-2">

@@ -894,6 +894,32 @@ export function mountAdminRoutes(
     res.redirect("/admin/properties");
   });
 
+  router.post("/properties/buildings/:id", (req, res) => {
+    const b = repo.buildings.get(req.params.id as string);
+    if (!b) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const parsed = buildingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).render("error", { title: "Invalid building", message: "" });
+      return;
+    }
+    const before = { ...b };
+    b.name = parsed.data.name;
+    b.address = parsed.data.address;
+    b.city = parsed.data.city;
+    b.district = parsed.data.district || undefined;
+    audit(repo, req, {
+      action: "building.edit",
+      entityType: "building",
+      entityId: b.id,
+      before: before as unknown as Record<string, unknown>,
+      after: { ...b } as unknown as Record<string, unknown>,
+    });
+    res.redirect("/admin/properties");
+  });
+
   function parseLines(value: string | undefined): string[] {
     if (!value) return [];
     return value
@@ -1132,6 +1158,73 @@ export function mountAdminRoutes(
         commissionValue: rule.value,
       },
     });
+    res.redirect("/admin/agents");
+  });
+
+  const userEditSchema = z.object({
+    fullName: z.string().min(1),
+    email: z.string().email(),
+    phone: z.string().optional(),
+    password: z.string().optional(),
+  });
+
+  function applyUserEdit(
+    user: import("../../domain/types.js").User,
+    data: { fullName: string; email: string; phone?: string; password?: string },
+  ) {
+    const before = {
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone,
+      passwordChanged: false,
+    };
+    user.fullName = data.fullName;
+    user.email = data.email;
+    user.phone = data.phone?.trim() || undefined;
+    let passwordChanged = false;
+    if (data.password && data.password.length > 0) {
+      if (data.password.length < 8) throw new Error("Password must be at least 8 characters.");
+      user.passwordHash = bcrypt.hashSync(data.password, 8);
+      passwordChanged = true;
+    }
+    return {
+      before,
+      after: {
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        passwordChanged,
+      },
+    };
+  }
+
+  router.post("/agents/:id/edit", (req, res) => {
+    const u = repo.users.get(req.params.id as string);
+    if (!u || u.role !== "sales_agent") {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const parsed = userEditSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).render("error", { title: "Invalid edit", message: "" });
+      return;
+    }
+    try {
+      const diff = applyUserEdit(u, parsed.data);
+      audit(repo, req, {
+        action: "agent.edit",
+        entityType: "user",
+        entityId: u.id,
+        before: diff.before,
+        after: diff.after,
+      });
+    } catch (err) {
+      res.status(400).render("error", {
+        title: "Cannot save",
+        message: (err as Error).message,
+      });
+      return;
+    }
     res.redirect("/admin/agents");
   });
 
@@ -1425,6 +1518,36 @@ export function mountAdminRoutes(
         fixedPayVnd: Math.round(parsed.data.fixedPayPerJobK * 1000),
       },
     });
+    res.redirect("/admin/cleaners");
+  });
+
+  router.post("/cleaners/:id/edit", (req, res) => {
+    const u = repo.users.get(req.params.id as string);
+    if (!u || u.role !== "cleaning_crew") {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const parsed = userEditSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).render("error", { title: "Invalid edit", message: "" });
+      return;
+    }
+    try {
+      const diff = applyUserEdit(u, parsed.data);
+      audit(repo, req, {
+        action: "cleaner.edit",
+        entityType: "user",
+        entityId: u.id,
+        before: diff.before,
+        after: diff.after,
+      });
+    } catch (err) {
+      res.status(400).render("error", {
+        title: "Cannot save",
+        message: (err as Error).message,
+      });
+      return;
+    }
     res.redirect("/admin/cleaners");
   });
 
