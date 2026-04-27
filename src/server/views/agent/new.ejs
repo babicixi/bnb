@@ -1,27 +1,67 @@
 <%- include('../_header') %>
 <h1>Create booking on behalf of guest</h1>
+
+<%
+  const timeOptions = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const v = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      timeOptions.push(v);
+    }
+  }
+%>
+
 <div class="card">
   <% if (error) { %><p class="error"><%= error %></p><% } %>
   <form method="post" action="/agent/new">
     <label>Room</label>
     <select name="roomId" required>
-      <% rooms.forEach(function(r){ %><option value="<%= r.id %>"><%= r.name %> (<%= formatVnd(r.baseDayRateVnd) %>/day)</option><% }) %>
+      <% rooms.forEach(function(r){ %>
+        <option value="<%= r.id %>"><%= r.name %> (<%= formatVnd(r.baseDayRateVnd) %>/day)</option>
+      <% }) %>
     </select>
-    <label>Type</label>
-    <select name="bookingType">
-      <option value="day">Day</option>
-      <option value="multi_day">Multi-day</option>
-      <option value="hourly">Hourly</option>
-    </select>
-    <label>Check-in</label>
-    <input type="datetime-local" name="checkInAt" required />
-    <label>Check-out</label>
-    <input type="datetime-local" name="checkOutAt" required />
+
+    <div class="grid cols-2">
+      <div>
+        <label><%= t('booking.checkin_date') %></label>
+        <input type="date" name="checkInDate" required />
+      </div>
+      <div>
+        <label><%= t('booking.checkin_time') %></label>
+        <select name="checkInTime" required>
+          <% timeOptions.forEach(function(v){ %>
+            <option value="<%= v %>" <%= v === '14:00' ? 'selected' : '' %>><%= v %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div>
+        <label><%= t('booking.checkout_date') %></label>
+        <input type="date" name="checkOutDate" required />
+      </div>
+      <div>
+        <label><%= t('booking.checkout_time') %></label>
+        <select name="checkOutTime" required>
+          <% timeOptions.forEach(function(v){ %>
+            <option value="<%= v %>" <%= v === '11:00' ? 'selected' : '' %>><%= v %></option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
+
+    <p class="muted-small">
+      Booking type is detected automatically from the times.
+      Day &amp; multi-day check-in must be at or after 14:00.
+    </p>
 
     <h3>Guest</h3>
     <label>Name</label><input name="guestName" required />
     <label>Phone</label><input name="guestPhone" required />
-    <label>Email (optional)</label><input type="email" name="guestEmail" />
+    <label><%= t('booking.email_required') %></label>
+    <input type="email" name="guestEmail" required />
+    <label><%= t('booking.facebook') %></label>
+    <input type="text" name="guestFacebook" placeholder="facebook.com/handle or @handle" />
+    <label><%= t('booking.instagram') %></label>
+    <input type="text" name="guestInstagram" placeholder="@handle" />
 
     <label>Apply discount</label>
     <select name="discountId">
@@ -33,7 +73,7 @@
 
     <label>Notes</label>
     <textarea name="notes" rows="2"></textarea>
-    <p><button type="submit">Create booking + 15-min hold</button></p>
+    <p><button type="submit"><%= t('booking.reserve') %></button></p>
   </form>
 </div>
 <%- include('../_footer') %>

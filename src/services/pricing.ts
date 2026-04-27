@@ -22,6 +22,30 @@ export interface NormalizedBookingTimes {
   convertedToDayRate: boolean;
 }
 
+/**
+ * Picks a booking type from raw check-in / check-out times so the user does
+ * not have to choose:
+ *   - same Vietnam calendar day  → "hourly"
+ *   - exactly one day apart      → "day"
+ *   - two or more days apart     → "multi_day"
+ *
+ * `normalizeBookingTimes` still does its own validation/conversion on top
+ * (e.g. an hourly booking that crosses midnight ends up as "day" via the
+ * different-day branch and gets re-normalised to next-day 11:00).
+ */
+export function detectBookingType(
+  checkInAt: Date,
+  checkOutAt: Date,
+): BookingType {
+  const inKey = vietnamDateKey(checkInAt);
+  const outKey = vietnamDateKey(checkOutAt);
+  if (inKey === outKey) return "hourly";
+  const inMs = Date.parse(`${inKey}T00:00:00Z`);
+  const outMs = Date.parse(`${outKey}T00:00:00Z`);
+  const days = Math.round((outMs - inMs) / 86_400_000);
+  return days <= 1 ? "day" : "multi_day";
+}
+
 export interface BookingPriceInput {
   bookingType: BookingType;
   checkInAt: Date;

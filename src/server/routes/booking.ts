@@ -9,6 +9,7 @@ import {
   checkAvailability,
   createBookingFromHold,
   createHold,
+  detectBookingType,
   expireOldHolds,
   recordPendingCommission,
   uploadPaymentProof,
@@ -28,14 +29,34 @@ const bookingTypeSchema = z.enum(["hourly", "day", "multi_day"]);
 
 const holdRequestSchema = z.object({
   roomId: z.string(),
-  bookingType: bookingTypeSchema,
-  checkInAt: z.string().min(1),
-  checkOutAt: z.string().min(1),
+  // bookingType is no longer required — we auto-detect from times when absent.
+  // Tests still pass it explicitly to assert specific behaviour.
+  bookingType: bookingTypeSchema.optional(),
+  // Either pre-composed ISO strings (used by tests) or split date+time pairs
+  // (sent by the form). Both branches are accepted.
+  checkInAt: z.string().optional(),
+  checkInDate: z.string().optional(),
+  checkInTime: z.string().optional(),
+  checkOutAt: z.string().optional(),
+  checkOutDate: z.string().optional(),
+  checkOutTime: z.string().optional(),
   guestName: z.string().min(1),
   guestPhone: z.string().min(1),
-  guestEmail: z.string().email().optional().or(z.literal("")),
+  guestEmail: z.string().email(),
+  guestFacebook: z.string().optional(),
+  guestInstagram: z.string().optional(),
   notes: z.string().optional(),
 });
+
+function composeDateTime(
+  direct?: string,
+  date?: string,
+  time?: string,
+): string | undefined {
+  if (direct && direct.length > 0) return direct;
+  if (date && time) return `${date}T${time}`;
+  return undefined;
+}
 
 export function mountBookingRoutes(
   app: Express,
@@ -82,8 +103,24 @@ export function mountBookingRoutes(
       res.status(404).render("error", { title: "Room not found", message: "" });
       return;
     }
-    const checkInAt = parseVietnamLocal(data.checkInAt);
-    const checkOutAt = parseVietnamLocal(data.checkOutAt);
+    const checkInRaw = composeDateTime(
+      data.checkInAt,
+      data.checkInDate,
+      data.checkInTime,
+    );
+    const checkOutRaw = composeDateTime(
+      data.checkOutAt,
+      data.checkOutDate,
+      data.checkOutTime,
+    );
+    if (!checkInRaw || !checkOutRaw) {
+      res
+        .status(400)
+        .render("error", { title: "Invalid dates", message: "" });
+      return;
+    }
+    const checkInAt = parseVietnamLocal(checkInRaw);
+    const checkOutAt = parseVietnamLocal(checkOutRaw);
     if (
       Number.isNaN(checkInAt.getTime()) ||
       Number.isNaN(checkOutAt.getTime())
@@ -91,6 +128,7 @@ export function mountBookingRoutes(
       res.status(400).render("error", { title: "Invalid dates", message: "" });
       return;
     }
+    const bookingType = data.bookingType ?? detectBookingType(checkInAt, checkOutAt);
 
     expireOldHolds(repo.holds);
     const availability = checkAvailability(
@@ -110,7 +148,7 @@ export function mountBookingRoutes(
     let priceCheck;
     try {
       priceCheck = calculateBookingPrice({
-        bookingType: data.bookingType,
+        bookingType,
         checkInAt,
         checkOutAt,
         room,
@@ -128,7 +166,9 @@ export function mountBookingRoutes(
       id: nextId("guest"),
       fullName: data.guestName,
       phone: data.guestPhone,
-      email: data.guestEmail || undefined,
+      email: data.guestEmail,
+      facebookHandle: data.guestFacebook?.trim() || undefined,
+      instagramHandle: data.guestInstagram?.trim() || undefined,
     };
     repo.guests.set(guest.id, guest);
 
@@ -151,7 +191,7 @@ export function mountBookingRoutes(
       guest,
       room,
       rates: repo.rates,
-      bookingType: data.bookingType,
+      bookingType,
       salesAgentId: undefined,
     });
     booking.notes = data.notes?.trim() || undefined;

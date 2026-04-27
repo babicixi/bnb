@@ -54,6 +54,8 @@ export interface Guest {
   email?: string;
   documentNumber?: string;
   notes?: string;
+  facebookHandle?: string;
+  instagramHandle?: string;
 }
 
 export interface Building {

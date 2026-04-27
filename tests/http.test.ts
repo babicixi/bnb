@@ -77,12 +77,18 @@ function vietnamIso(dayOffset: number, hour: number, minute = 0): string {
   return t.toISOString();
 }
 
-function slot(): { checkInAt: string; checkOutAt: string; day: number } {
+function slot(): {
+  checkInAt: string;
+  checkOutAt: string;
+  guestEmail: string;
+  day: number;
+} {
   const day = uniqueDayOffset();
   return {
     day,
     checkInAt: vietnamIso(day, 15),
     checkOutAt: vietnamIso(day, 18),
+    guestEmail: `slot-${day}@example.com`,
   };
 }
 
@@ -106,6 +112,55 @@ describe("public site", () => {
       });
     expect(res.status).toBe(302);
     expect(res.headers.location).toMatch(/^\/book\/BNB-/);
+  });
+
+  it("form-style submission (date+time pairs, no bookingType) auto-detects type and stores fb/ig", async () => {
+    const day = uniqueDayOffset();
+    const date = vietnamIso(day, 0).slice(0, 10);
+    const res = await request(ctx.app)
+      .post("/book/hold")
+      .type("form")
+      .send({
+        roomId: "room-1",
+        checkInDate: date,
+        checkInTime: "14:30",
+        checkOutDate: date,
+        checkOutTime: "18:00",
+        guestName: "Form Guest",
+        guestPhone: "+84112233445",
+        guestEmail: "form-guest@example.com",
+        guestFacebook: "facebook.com/formguest",
+        guestInstagram: "@formguest",
+      });
+    expect(res.status).toBe(302);
+    const number = res.headers.location!.split("/").pop()!;
+    const booking = ctx.repo.bookings.get(
+      ctx.repo.bookingsByNumber.get(number)!,
+    )!;
+    // same-day → hourly auto-detected
+    expect(booking.bookingType).toBe("hourly");
+    const guest = ctx.repo.guests.get(booking.guestId)!;
+    expect(guest.email).toBe("form-guest@example.com");
+    expect(guest.facebookHandle).toBe("facebook.com/formguest");
+    expect(guest.instagramHandle).toBe("@formguest");
+  });
+
+  it("missing email is rejected (guest email is now required)", async () => {
+    const day = uniqueDayOffset();
+    const date = vietnamIso(day, 0).slice(0, 10);
+    const res = await request(ctx.app)
+      .post("/book/hold")
+      .type("form")
+      .send({
+        roomId: "room-2",
+        checkInDate: date,
+        checkInTime: "14:00",
+        checkOutDate: date,
+        checkOutTime: "18:00",
+        guestName: "No Email Guest",
+        guestPhone: "+84112233446",
+      });
+    expect(res.status).toBe(400);
   });
 });
 
@@ -248,6 +303,7 @@ describe("admin permissions and dashboards", () => {
         checkOutAt: vietnamIso(s.day + 1, 11),
         guestName: "Edit Guest",
         guestPhone: "+84555555555",
+        guestEmail: "edit-guest@example.com",
       });
     const number = create.headers.location!.split("/").pop()!;
     const id = ctx.repo.bookingsByNumber.get(number)!;
@@ -459,6 +515,7 @@ describe("audit log + commission ledger", () => {
         checkOutAt: vietnamIso(s.day + 1, 11),
         guestName: "Audit Guest",
         guestPhone: "+84131313131",
+        guestEmail: "audit-guest@example.com",
       });
     const id = ctx.repo.bookingsByNumber.get(
       create.headers.location!.split("/").pop()!,
@@ -632,6 +689,7 @@ describe("maintenance blocks", () => {
         checkOutAt: vietnamIso(day, 18),
         guestName: "Conflict Guest",
         guestPhone: "+84161616161",
+        guestEmail: "conflict-guest@example.com",
       });
     expect(attempt.status).toBe(409);
   });

@@ -7,6 +7,7 @@ import {
   checkAvailability,
   createBookingFromHold,
   createHold,
+  detectBookingType,
   expireOldHolds,
   recordPendingCommission,
   requestCancellation,
@@ -56,15 +57,32 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
 
   const newBookingSchema = z.object({
     roomId: z.string(),
-    bookingType: z.enum(["hourly", "day", "multi_day"]),
-    checkInAt: z.string(),
-    checkOutAt: z.string(),
+    // optional: auto-detected from check-in / check-out times when absent
+    bookingType: z.enum(["hourly", "day", "multi_day"]).optional(),
+    checkInAt: z.string().optional(),
+    checkInDate: z.string().optional(),
+    checkInTime: z.string().optional(),
+    checkOutAt: z.string().optional(),
+    checkOutDate: z.string().optional(),
+    checkOutTime: z.string().optional(),
     guestName: z.string().min(1),
     guestPhone: z.string().min(1),
-    guestEmail: z.string().email().optional().or(z.literal("")),
+    guestEmail: z.string().email(),
+    guestFacebook: z.string().optional(),
+    guestInstagram: z.string().optional(),
     discountId: z.string().optional(),
     notes: z.string().optional(),
   });
+
+  function composeAgentDateTime(
+    direct?: string,
+    date?: string,
+    time?: string,
+  ): string | undefined {
+    if (direct && direct.length > 0) return direct;
+    if (date && time) return `${date}T${time}`;
+    return undefined;
+  }
 
   router.post("/new", (req, res) => {
     const parsed = newBookingSchema.safeParse(req.body);
@@ -84,8 +102,24 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
       res.status(404).render("error", { title: "Room not found", message: "" });
       return;
     }
-    const checkInAt = parseVietnamLocal(data.checkInAt);
-    const checkOutAt = parseVietnamLocal(data.checkOutAt);
+    const checkInRaw = composeAgentDateTime(
+      data.checkInAt,
+      data.checkInDate,
+      data.checkInTime,
+    );
+    const checkOutRaw = composeAgentDateTime(
+      data.checkOutAt,
+      data.checkOutDate,
+      data.checkOutTime,
+    );
+    if (!checkInRaw || !checkOutRaw) {
+      res.status(400).render("error", { title: "Invalid dates", message: "" });
+      return;
+    }
+    const checkInAt = parseVietnamLocal(checkInRaw);
+    const checkOutAt = parseVietnamLocal(checkOutRaw);
+    const bookingType =
+      data.bookingType ?? detectBookingType(checkInAt, checkOutAt);
 
     expireOldHolds(repo.holds);
     const availability = checkAvailability(
@@ -118,7 +152,7 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
     let price;
     try {
       price = calculateBookingPrice({
-        bookingType: data.bookingType,
+        bookingType,
         checkInAt,
         checkOutAt,
         room,
@@ -138,7 +172,9 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
       id: nextId("guest"),
       fullName: data.guestName,
       phone: data.guestPhone,
-      email: data.guestEmail || undefined,
+      email: data.guestEmail,
+      facebookHandle: data.guestFacebook?.trim() || undefined,
+      instagramHandle: data.guestInstagram?.trim() || undefined,
     };
     repo.guests.set(guest.id, guest);
 
@@ -162,7 +198,7 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
       guest,
       room,
       rates: repo.rates,
-      bookingType: data.bookingType,
+      bookingType,
       salesAgentId: agent.id,
       discounts,
     });

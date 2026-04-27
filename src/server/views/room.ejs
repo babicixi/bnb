@@ -3,41 +3,71 @@
 <p class="muted"><%= building && building.name %> · Room <%= room.roomNumber %> · up to <%= room.maxGuests %> guests</p>
 <p>Day rate: <strong><%= formatVnd(room.baseDayRateVnd) %></strong> · Hourly: <%= formatVnd(room.baseHourlyRateVnd) %></p>
 
+<%
+  // Generate 30-minute time slots in 24-hour format.
+  const timeOptions = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const v = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      timeOptions.push(v);
+    }
+  }
+%>
+
 <div class="card">
   <h2>Book this room</h2>
   <% if (error) { %><p class="error"><%= error %></p><% } %>
   <form method="post" action="/book/hold">
     <input type="hidden" name="roomId" value="<%= room.id %>" />
 
-    <label><%= t('booking.type') %></label>
-    <select name="bookingType">
-      <option value="day">Day</option>
-      <option value="multi_day">Multi-day</option>
-      <option value="hourly">Hourly</option>
-    </select>
+    <div class="grid cols-2">
+      <div>
+        <label><%= t('booking.checkin_date') %></label>
+        <input type="date" name="checkInDate" required />
+      </div>
+      <div>
+        <label><%= t('booking.checkin_time') %></label>
+        <select name="checkInTime" required>
+          <% timeOptions.forEach(function(v){ %>
+            <option value="<%= v %>" <%= v === '14:00' ? 'selected' : '' %>><%= v %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div>
+        <label><%= t('booking.checkout_date') %></label>
+        <input type="date" name="checkOutDate" required />
+      </div>
+      <div>
+        <label><%= t('booking.checkout_time') %></label>
+        <select name="checkOutTime" required>
+          <% timeOptions.forEach(function(v){ %>
+            <option value="<%= v %>" <%= v === '11:00' ? 'selected' : '' %>><%= v %></option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
 
-    <label><%= t('booking.checkin') %> (Vietnam time)</label>
-    <input type="datetime-local" name="checkInAt" required />
-
-    <label><%= t('booking.checkout') %> (Vietnam time)</label>
-    <input type="datetime-local" name="checkOutAt" required />
+    <p class="muted-small">
+      Booking type is detected automatically: same day → hourly · different days → day / multi-day.
+      Day &amp; multi-day check-in must be at or after 14:00; check-out is normalised to 11:00 on the departure day.
+      An hourly stay that crosses midnight becomes a day rate.
+    </p>
 
     <h3>Your details</h3>
     <label><%= t('booking.guest_name') %></label>
     <input type="text" name="guestName" required />
     <label><%= t('booking.phone') %></label>
     <input type="tel" name="guestPhone" required />
-    <label><%= t('booking.email') %></label>
-    <input type="email" name="guestEmail" />
+    <label><%= t('booking.email_required') %></label>
+    <input type="email" name="guestEmail" required />
+    <label><%= t('booking.facebook') %></label>
+    <input type="text" name="guestFacebook" placeholder="facebook.com/yourname or @handle" />
+    <label><%= t('booking.instagram') %></label>
+    <input type="text" name="guestInstagram" placeholder="@yourhandle" />
     <label><%= t('booking.notes') %></label>
     <textarea name="notes" rows="2"></textarea>
 
-    <p class="muted-small">
-      Day &amp; multi-day: check-in after 14:00, check-out 11:00 the next/departure day.
-      Hourly past midnight converts to a day rate at 11:00 next day.
-    </p>
-
-    <p><button type="submit"><%= t('booking.confirm') %></button></p>
+    <p><button type="submit"><%= t('booking.reserve') %></button></p>
   </form>
 </div>
 <%- include('_footer') %>

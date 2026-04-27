@@ -24,6 +24,17 @@ const dict: Record<string, Record<Locale, string>> = {
   "booking.email": { en: "Email (optional)", vi: "Email (không bắt buộc)" },
   "booking.notes": { en: "Notes (optional)", vi: "Ghi chú (không bắt buộc)" },
   "booking.confirm": { en: "Hold for 15 minutes", vi: "Giữ chỗ 15 phút" },
+  "booking.reserve": {
+    en: "Reserve — please upload the bank-transfer screenshot within 15 minutes",
+    vi: "Đặt giữ chỗ — vui lòng tải ảnh chuyển khoản trong 15 phút",
+  },
+  "booking.checkin_date": { en: "Check-in date", vi: "Ngày nhận phòng" },
+  "booking.checkin_time": { en: "Check-in time (24h)", vi: "Giờ nhận phòng (24h)" },
+  "booking.checkout_date": { en: "Check-out date", vi: "Ngày trả phòng" },
+  "booking.checkout_time": { en: "Check-out time (24h)", vi: "Giờ trả phòng (24h)" },
+  "booking.email_required": { en: "Email", vi: "Email" },
+  "booking.facebook": { en: "Facebook (optional)", vi: "Facebook (không bắt buộc)" },
+  "booking.instagram": { en: "Instagram (optional)", vi: "Instagram (không bắt buộc)" },
   "booking.upload_proof": {
     en: "Upload bank transfer screenshot",
     vi: "Tải lên ảnh chụp chuyển khoản",
