@@ -12,15 +12,24 @@
 </p>
 <% if (flash) { %><p class="success">Saved (<%= flash %>).</p><% } %>
 
-<form method="get" action="/admin/pricing" class="card">
-  <label>Room</label>
-  <select name="roomId" onchange="this.form.submit()">
-    <% rooms.forEach(function(r){ %>
-      <option value="<%= r.id %>" <%= room && room.id === r.id ? 'selected' : '' %>><%= r.name %></option>
-    <% }) %>
-  </select>
+<div class="card room-tab-card">
+  <% buildings.forEach(function(b){
+       var bRooms = rooms.filter(function(rr){ return rr.buildingId === b.id; });
+       if (bRooms.length === 0) return;
+  %>
+    <div class="room-tab-row">
+      <span class="room-tab-building"><%= b.name %></span>
+      <span class="room-tabs">
+        <% bRooms.forEach(function(rr){ %>
+          <a href="/admin/pricing?roomId=<%= rr.id %>" class="room-tab <%= room && room.id === rr.id ? 'active' : '' %>">
+            <%= rr.name %><% if (rr.roomNumber) { %> <span class="muted-small">· <%= rr.roomNumber %></span><% } %>
+          </a>
+        <% }) %>
+      </span>
+    </div>
+  <% }) %>
   <% if (room) { %>
-    <p class="muted-small" style="margin-top:0.5rem;">
+    <p class="muted-small" style="margin-top:0.75rem;">
       Defaults for <strong><%= room.name %></strong>:
       weekday <%= formatVnd(room.baseDayRateVnd) %>
       · weekend <%= room.baseWeekendRateVnd != null ? formatVnd(room.baseWeekendRateVnd) : '(uses weekday)' %>
@@ -28,7 +37,7 @@
       · hourly bookings <strong><%= room.hourlyEnabled === false ? 'DISABLED' : 'enabled' %></strong>.
     </p>
   <% } %>
-</form>
+</div>
 
 <% if (room) { %>
 <div class="card">

@@ -184,6 +184,41 @@ tr:hover td { background: #fafaf2; }
 }
 .view-toggle a.active { background: var(--accent); color: var(--accent-fg); }
 
+/* Room tabs (pricing page) — one row per building */
+.room-tab-card { padding: 0.75rem 1rem; }
+.room-tab-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px dashed var(--border);
+}
+.room-tab-row:last-of-type { border-bottom: 0; }
+.room-tab-building {
+  font-weight: 600;
+  font-size: 0.9rem;
+  min-width: 12rem;
+  color: var(--muted);
+}
+.room-tabs { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; }
+.room-tab {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--fg);
+  text-decoration: none;
+  font-size: 0.88rem;
+}
+.room-tab:hover { background: #fafafa; }
+.room-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.room-tab.active .muted-small { color: rgba(255,255,255,0.85); }
+
 /* Calendar — week view */
 .calendar {
   background: #fff;
