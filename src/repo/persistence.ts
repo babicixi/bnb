@@ -16,17 +16,28 @@ import type { Repository } from "./memory.js";
 const REVIVE_MAP = "__map__";
 const REVIVE_DATE = "__date__";
 
-function replacer(_key: string, value: unknown): unknown {
+// JSON.stringify calls Date.prototype.toJSON() *before* the replacer runs, so
+// a plain `value instanceof Date` check there always misses. Look up the
+// untransformed original on `this` instead.
+function replacer(this: unknown, key: string, value: unknown): unknown {
+  const parent = this as Record<string, unknown> | null;
+  const original = parent ? parent[key] : value;
+  if (original instanceof Date) {
+    return { __type: REVIVE_DATE, iso: original.toISOString() };
+  }
   if (value instanceof Map) {
     return { __type: REVIVE_MAP, entries: Array.from(value.entries()) };
-  }
-  if (value instanceof Date) {
-    return { __type: REVIVE_DATE, iso: value.toISOString() };
   }
   return value;
 }
 
+// Matches ISO 8601 with milliseconds and Z (what Date.toISOString emits).
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
 function reviver(_key: string, value: unknown): unknown {
+  if (typeof value === "string" && ISO_RE.test(value)) {
+    return new Date(value);
+  }
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const v = value as { __type?: string; entries?: unknown; iso?: string };
     if (v.__type === REVIVE_MAP && Array.isArray(v.entries)) {
