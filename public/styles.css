@@ -219,8 +219,13 @@ tr:hover td { background: #fafaf2; }
 }
 .room-tab.active .muted-small { color: rgba(255,255,255,0.85); }
 
-/* Booking form: keep date inputs and time selects identically sized so the
-   four checkin/checkout boxes line up symmetrically in their 2-col grid. */
+/* Booking form: force exactly 2 columns regardless of viewport so the four
+   boxes lay out as a 2×2 grid (date | time on row 1, date | time on row 2).
+   The default .grid.cols-2 uses auto-fit minmax(280px, 1fr) which gives 3
+   columns on widescreens. Override here. */
+.grid.cols-2.booking-times {
+  grid-template-columns: 1fr 1fr;
+}
 .booking-times input,
 .booking-times select {
   width: 100%;
