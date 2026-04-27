@@ -219,6 +219,14 @@ tr:hover td { background: #fafaf2; }
 }
 .room-tab.active .muted-small { color: rgba(255,255,255,0.85); }
 
+/* Booking form: keep date inputs and time selects identically sized so the
+   four checkin/checkout boxes line up symmetrically in their 2-col grid. */
+.booking-times input,
+.booking-times select {
+  width: 100%;
+  max-width: none;
+}
+
 /* Calendar — week view */
 .calendar {
   background: #fff;

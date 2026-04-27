@@ -1,119 +1,263 @@
 <%- include('../_header') %>
 <%- include('_nav') %>
 <h1>Reports</h1>
-<p><a href="/admin">← Dashboard</a></p>
+<p class="muted-small">
+  Days are computed as: hourly = hours / 24 (e.g. 6h = 0.25d) · day rate = 1d
+  (standard 14:00 → 11:00) · multi-day = nights between Vietnam-local check-in
+  and check-out dates.
+  Cancelled and held bookings are excluded.
+</p>
 
-<form method="get" action="/admin/reports" class="card">
-  <div class="grid cols-2">
-    <div><label>From</label><input type="date" name="from" value="<%= range.from %>" /></div>
-    <div><label>To</label><input type="date" name="to" value="<%= range.to %>" /></div>
+<%
+  function fmt(n) {
+    if (n == null) return '0 ₫';
+    return new Intl.NumberFormat('vi-VN').format(Math.round(n)) + ' ₫';
+  }
+  function fmt1(n){ return (n || 0).toFixed(1); }
+  function buildQuery(overrides){
+    var p = new URLSearchParams();
+    if (filters.from) p.set('from', filters.from);
+    if (filters.to) p.set('to', filters.to);
+    p.set('granularity', granularity);
+    Object.keys(overrides).forEach(function(k){
+      if (overrides[k] === null || overrides[k] === '') p.delete(k);
+      else p.set(k, overrides[k]);
+    });
+    return p.toString();
+  }
+%>
+
+<form method="get" action="/admin/reports" class="card" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+  <div style="flex:0 0 auto;">
+    <label>Granularity</label>
+    <span class="view-toggle">
+      <a href="/admin/reports?<%= buildQuery({granularity:'month'}) %>" class="<%= granularity === 'month' ? 'active' : '' %>">Month</a>
+      <a href="/admin/reports?<%= buildQuery({granularity:'week'}) %>" class="<%= granularity === 'week' ? 'active' : '' %>">Week</a>
+    </span>
   </div>
-  <p><button type="submit">Apply</button></p>
+  <div style="flex:0 0 auto;">
+    <label>From</label>
+    <input type="date" name="from" value="<%= filters.from %>" />
+  </div>
+  <div style="flex:0 0 auto;">
+    <label>To</label>
+    <input type="date" name="to" value="<%= filters.to %>" />
+  </div>
+  <input type="hidden" name="granularity" value="<%= granularity %>" />
+  <div style="flex:0 0 auto;">
+    <button type="submit">Apply</button>
+    <% if (!filters.isDefault) { %>
+      <a href="/admin/reports?granularity=<%= granularity %>" class="btn secondary" style="margin-left:0.4rem;">Reset to trailing 12<%= granularity === 'month' ? 'm' : 'w' %></a>
+    <% } %>
+  </div>
+  <div class="muted-small" style="flex:1 1 100%;">
+    Default window is the trailing 12 <%= granularity === 'month' ? 'months' : 'weeks' %>.
+  </div>
 </form>
 
 <div class="card">
-  <h2>Summary <span class="muted-small"><%= range.from %> → <%= range.to %></span></h2>
+  <h2>Window total <span class="muted-small">(<%= periodLabels[0] %> → <%= periodLabels[periodLabels.length - 1] %>)</span></h2>
   <div class="grid cols-3">
-    <div><strong><%= formatVnd(summary.netRevenueVnd) %></strong><br/><span class="muted-small">Net revenue</span></div>
-    <div><strong><%= formatVnd(summary.grossRevenueVnd) %></strong><br/><span class="muted-small">Gross before discounts</span></div>
-    <div><strong><%= formatVnd(summary.discountsVnd) %></strong><br/><span class="muted-small">Discounts given</span></div>
-    <div><strong><%= formatVnd(summary.refundsVnd) %></strong><br/><span class="muted-small">Refunds owed</span></div>
-    <div><strong><%= formatVnd(summary.minibarVnd) %></strong><br/><span class="muted-small">Minibar</span></div>
-    <div><strong><%= formatVnd(summary.damagesVnd) %></strong><br/><span class="muted-small">Damages</span></div>
-    <div><strong><%= formatVnd(summary.pendingExtraPaymentsVnd) %></strong><br/><span class="muted-small">Pending extra payments</span></div>
-    <div><strong><%= formatVnd(summary.projectedRevenueVnd) %></strong><br/><span class="muted-small">Projected (held / pending)</span></div>
-    <div><strong><%= formatVnd(summary.averageBookingValueVnd) %></strong><br/><span class="muted-small">Avg booking value</span></div>
-    <div><strong><%= summary.bookingsCount %></strong><br/><span class="muted-small">Bookings counted</span></div>
-    <div><strong><%= summary.cancelledCount %></strong><br/><span class="muted-small">Cancellations</span></div>
-    <div><strong><%= (summary.cancellationRate * 100).toFixed(1) %>%</strong><br/><span class="muted-small">Cancellation rate</span></div>
+    <div><strong><%= grandTotal.bookings %></strong><br/><span class="muted-small">Bookings</span></div>
+    <div><strong><%= fmt1(grandTotal.daysBooked) %></strong><br/><span class="muted-small">Days booked</span></div>
+    <div><strong><%= fmt(grandTotal.roomRevenueVnd) %></strong><br/><span class="muted-small">Room revenue (net)</span></div>
+    <div><strong><%= fmt(grandTotal.minibarVnd) %></strong><br/><span class="muted-small">Minibar (ancillary)</span></div>
+    <div><strong><%= fmt(grandTotal.discountsVnd) %></strong><br/><span class="muted-small">Discounts given</span></div>
+    <div><strong><%= fmt(grandTotal.commissionVnd) %></strong><br/><span class="muted-small">Sales commission</span></div>
+    <div><strong><%= fmt(grandTotal.cleaningFeesVnd) %></strong><br/><span class="muted-small">Cleaning fees</span></div>
   </div>
 </div>
 
+<%
+  // ----- chart 1: room revenue trend (lines, one per room)
+  var chartW = 760, chartH = 240, padL = 56, padB = 30, padT = 12, padR = 12;
+  var plotW = chartW - padL - padR;
+  var plotH = chartH - padT - padB;
+  var maxRev = 1;
+  roomReports.forEach(function(rr){
+    rr.perPeriod.forEach(function(pp){
+      if (pp.m.roomRevenueVnd > maxRev) maxRev = pp.m.roomRevenueVnd;
+    });
+  });
+  var n = periods.length;
+  function px(i){ return padL + (n <= 1 ? plotW/2 : i * (plotW / (n - 1))); }
+  function py(v){ return padT + plotH - (v / maxRev) * plotH; }
+  var palette = ['#b03030','#2a7a3a','#1f6f9f','#b58700','#7a3aa8','#3a7a7a','#a8493a','#5c5c5c','#9a3a76','#3a8aa8','#a87f3a','#3aa872'];
+%>
+
 <div class="card">
-  <h2>Occupancy</h2>
-  <p>Booked: <strong><%= occupancy.bookedHours.toFixed(1) %> h</strong> · Cleaning buffer: <%= occupancy.cleaningBufferHours.toFixed(1) %> h · Available: <%= occupancy.totalAvailableHours.toFixed(1) %> h</p>
-  <p>Overall occupancy: <strong><%= (occupancy.occupancyRate * 100).toFixed(1) %>%</strong> (paid hours only — cleaning buffer reported separately)</p>
-  <table>
-    <thead><tr><th>Room</th><th>Booked h</th><th>Buffer h</th><th>Occupancy</th></tr></thead>
-    <tbody>
-      <% occupancy.byRoom.forEach(function(r){ var room = rooms.get(r.roomId); %>
-        <tr>
-          <td><%= room ? room.name : r.roomId %></td>
-          <td><%= r.bookedHours.toFixed(1) %></td>
-          <td><%= r.cleaningBufferHours.toFixed(1) %></td>
-          <td><%= (r.occupancyRate * 100).toFixed(1) %>%</td>
-        </tr>
+  <h2>Room revenue trend (<%= granularity === 'month' ? 'monthly' : 'weekly' %>)</h2>
+  <% if (roomReports.length === 0 || maxRev <= 1) { %>
+    <p class="muted">No revenue in window.</p>
+  <% } else { %>
+    <div style="overflow-x:auto;">
+      <svg viewBox="0 0 <%= chartW %> <%= chartH %>" width="100%" style="max-width:<%= chartW %>px; height:auto;">
+        <!-- y axis -->
+        <line x1="<%= padL %>" y1="<%= padT %>" x2="<%= padL %>" y2="<%= padT + plotH %>" stroke="#ccc" />
+        <line x1="<%= padL %>" y1="<%= padT + plotH %>" x2="<%= padL + plotW %>" y2="<%= padT + plotH %>" stroke="#ccc" />
+        <% [0, 0.25, 0.5, 0.75, 1].forEach(function(t){
+             var y = padT + plotH * (1 - t);
+             var v = maxRev * t;
+        %>
+          <line x1="<%= padL %>" y1="<%= y %>" x2="<%= padL + plotW %>" y2="<%= y %>" stroke="#eee" />
+          <text x="<%= padL - 6 %>" y="<%= y + 4 %>" font-size="10" fill="#666" text-anchor="end"><%= (v/1_000_000).toFixed(1) %>M</text>
+        <% }) %>
+        <% periods.forEach(function(p, i){ %>
+          <text x="<%= px(i) %>" y="<%= padT + plotH + 16 %>" font-size="9" fill="#666" text-anchor="middle"><%= periodLabels[i] %></text>
+        <% }) %>
+        <% roomReports.forEach(function(rr, ri){
+             var color = palette[ri % palette.length];
+             var pts = rr.perPeriod.map(function(pp, i){ return px(i) + ',' + py(pp.m.roomRevenueVnd); }).join(' ');
+        %>
+          <polyline fill="none" stroke="<%= color %>" stroke-width="2" points="<%= pts %>" />
+          <% rr.perPeriod.forEach(function(pp, i){ %>
+            <circle cx="<%= px(i) %>" cy="<%= py(pp.m.roomRevenueVnd) %>" r="2.5" fill="<%= color %>"><title><%= rr.room.name %> · <%= periodLabels[i] %>: <%= fmt(pp.m.roomRevenueVnd) %></title></circle>
+          <% }) %>
+        <% }) %>
+      </svg>
+    </div>
+    <p class="muted-small" style="display:flex; flex-wrap:wrap; gap:0.4rem 1rem; margin-top:0.5rem;">
+      <% roomReports.forEach(function(rr, ri){ var color = palette[ri % palette.length]; %>
+        <span><span style="display:inline-block; width:10px; height:10px; background:<%= color %>; vertical-align:middle; margin-right:0.25rem; border-radius:2px;"></span><%= rr.room.name %></span>
       <% }) %>
-    </tbody>
-  </table>
+    </p>
+  <% } %>
+</div>
+
+<%
+  // ----- chart 2: window-total room comparison (horizontal bars)
+  var maxTotal = 1;
+  roomReports.forEach(function(rr){ if (rr.total.roomRevenueVnd > maxTotal) maxTotal = rr.total.roomRevenueVnd; });
+  var sortedRooms = roomReports.slice().sort(function(a, b){ return b.total.roomRevenueVnd - a.total.roomRevenueVnd; });
+%>
+
+<div class="card">
+  <h2>Room ranking — total revenue in window</h2>
+  <% if (sortedRooms.length === 0 || maxTotal <= 1) { %>
+    <p class="muted">No revenue in window.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Rank</th><th>Room</th><th>Building</th><th>Bookings</th><th>Days</th><th>Revenue</th><th style="width:30%">Share</th></tr></thead>
+      <tbody>
+        <% sortedRooms.forEach(function(rr, idx){ var pct = (rr.total.roomRevenueVnd / maxTotal) * 100; %>
+          <tr>
+            <td><%= idx + 1 %></td>
+            <td><strong><%= rr.room.name %></strong></td>
+            <td class="muted-small"><%= rr.buildingName %></td>
+            <td><%= rr.total.bookings %></td>
+            <td><%= fmt1(rr.total.daysBooked) %></td>
+            <td><%= fmt(rr.total.roomRevenueVnd) %></td>
+            <td>
+              <div style="background:#f1ebeb; height:14px; border-radius:3px; overflow:hidden;">
+                <div style="width:<%= pct.toFixed(1) %>%; height:100%; background:var(--accent);"></div>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
 </div>
 
 <div class="card">
-  <h2>By room</h2>
-  <table>
-    <thead><tr><th>Room</th><th>Bookings</th><th>Net</th><th>Gross</th><th>Discounts</th><th>Refunds</th></tr></thead>
-    <tbody>
-      <% summary.byRoom.forEach(function(r){ var room = rooms.get(r.roomId); %>
-        <tr>
-          <td><%= room ? room.name : r.roomId %></td>
-          <td><%= r.bookings %></td>
-          <td><%= formatVnd(r.netRevenueVnd) %></td>
-          <td><%= formatVnd(r.grossRevenueVnd) %></td>
-          <td><%= formatVnd(r.discountsVnd) %></td>
-          <td><%= formatVnd(r.refundsVnd) %></td>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
+  <h2>By building</h2>
+  <% if (buildingGroups.length === 0) { %>
+    <p class="muted">No buildings.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Building</th>
+            <th>Bookings</th>
+            <th>Days</th>
+            <th>Room revenue</th>
+            <th>Minibar</th>
+            <th>Discounts</th>
+            <th>Commission</th>
+            <th>Cleaning fees</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% buildingGroups.forEach(function(g){ %>
+            <tr>
+              <td><strong><%= g.label %></strong></td>
+              <td><%= g.total.bookings %></td>
+              <td><%= fmt1(g.total.daysBooked) %></td>
+              <td><%= fmt(g.total.roomRevenueVnd) %></td>
+              <td><%= fmt(g.total.minibarVnd) %></td>
+              <td><%= fmt(g.total.discountsVnd) %></td>
+              <td><%= fmt(g.total.commissionVnd) %></td>
+              <td><%= fmt(g.total.cleaningFeesVnd) %></td>
+            </tr>
+          <% }) %>
+          <tr style="border-top:2px solid var(--border); font-weight:700;">
+            <td>Grand total</td>
+            <td><%= grandTotal.bookings %></td>
+            <td><%= fmt1(grandTotal.daysBooked) %></td>
+            <td><%= fmt(grandTotal.roomRevenueVnd) %></td>
+            <td><%= fmt(grandTotal.minibarVnd) %></td>
+            <td><%= fmt(grandTotal.discountsVnd) %></td>
+            <td><%= fmt(grandTotal.commissionVnd) %></td>
+            <td><%= fmt(grandTotal.cleaningFeesVnd) %></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
 </div>
 
-<div class="card">
-  <h2>Sales agent performance</h2>
-  <table>
-    <thead><tr><th>Agent</th><th>Bookings</th><th>Confirmed</th><th>Cancelled</th><th>Net revenue</th><th>Discounts used</th><th>Commission earned</th><th>Pending</th><th>Paid</th></tr></thead>
-    <tbody>
-      <% if (agentPerf.length === 0) { %><tr><td colspan="9" class="muted">No agent activity in window.</td></tr><% } %>
-      <% agentPerf.forEach(function(a){ var u = users.get(a.agentId); %>
-        <tr>
-          <td><%= u ? u.fullName : a.agentId %></td>
-          <td><%= a.bookings %></td>
-          <td><%= a.confirmed %></td>
-          <td><%= a.cancelled %></td>
-          <td><%= formatVnd(a.netRevenueVnd) %></td>
-          <td><%= formatVnd(a.discountsUsedVnd) %></td>
-          <td><%= formatVnd(a.commissionEarnedVnd) %></td>
-          <td><%= formatVnd(a.commissionPendingVnd) %></td>
-          <td><%= formatVnd(a.commissionPaidVnd) %></td>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
-</div>
-
-<div class="card">
-  <h2>Cleaning crew performance</h2>
-  <table>
-    <thead><tr><th>Cleaner</th><th>Assigned</th><th>Completed</th><th>Avg rating</th><th>Pay earned</th></tr></thead>
-    <tbody>
-      <% if (cleanerPerf.length === 0) { %><tr><td colspan="5" class="muted">No cleaning activity in window.</td></tr><% } %>
-      <% cleanerPerf.forEach(function(c){ var u = users.get(c.cleanerId); %>
-        <tr>
-          <td><%= u ? u.fullName : c.cleanerId %></td>
-          <td><%= c.jobsAssigned %></td>
-          <td><%= c.jobsCompleted %></td>
-          <td><%= c.averageRating != null ? c.averageRating.toFixed(2) : '—' %></td>
-          <td><%= formatVnd(c.fixedPayEarnedVnd) %></td>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
-</div>
+<% roomReports.forEach(function(rr){ %>
+  <div class="card">
+    <h2><%= rr.room.name %> <span class="muted-small">· <%= rr.buildingName %><% if (rr.room.roomNumber) { %> · room <%= rr.room.roomNumber %><% } %></span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th><%= granularity === 'month' ? 'Month' : 'Week' %></th>
+            <th>Bookings</th>
+            <th>Days</th>
+            <th>Room revenue</th>
+            <th>Minibar</th>
+            <th>Discounts</th>
+            <th>Commission</th>
+            <th>Cleaning fees</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rr.perPeriod.forEach(function(pp, i){ %>
+            <tr>
+              <td><%= periodLabels[i] %></td>
+              <td><%= pp.m.bookings %></td>
+              <td><%= fmt1(pp.m.daysBooked) %></td>
+              <td><%= fmt(pp.m.roomRevenueVnd) %></td>
+              <td><%= fmt(pp.m.minibarVnd) %></td>
+              <td><%= fmt(pp.m.discountsVnd) %></td>
+              <td><%= fmt(pp.m.commissionVnd) %></td>
+              <td><%= fmt(pp.m.cleaningFeesVnd) %></td>
+            </tr>
+          <% }) %>
+          <tr style="border-top:2px solid var(--border); font-weight:700;">
+            <td>Total</td>
+            <td><%= rr.total.bookings %></td>
+            <td><%= fmt1(rr.total.daysBooked) %></td>
+            <td><%= fmt(rr.total.roomRevenueVnd) %></td>
+            <td><%= fmt(rr.total.minibarVnd) %></td>
+            <td><%= fmt(rr.total.discountsVnd) %></td>
+            <td><%= fmt(rr.total.commissionVnd) %></td>
+            <td><%= fmt(rr.total.cleaningFeesVnd) %></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<% }) %>
 
 <div class="card">
   <h2>Exports</h2>
   <p>
     <a class="btn secondary" href="/admin/exports/bookings.csv">Bookings CSV</a>
-    <a class="btn secondary" href="/admin/exports/revenue.csv?from=<%= range.from %>&to=<%= range.to %>">Revenue CSV</a>
+    <a class="btn secondary" href="/admin/exports/revenue.csv<%= filters.from && filters.to ? ('?from=' + filters.from + '&to=' + filters.to) : '' %>">Revenue CSV</a>
     <a class="btn secondary" href="/admin/exports/commission-ledger.csv">Commission ledger CSV</a>
     <a class="btn secondary" href="/admin/exports/audit.csv">Audit log CSV</a>
   </p>

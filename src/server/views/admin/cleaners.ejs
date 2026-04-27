@@ -18,12 +18,12 @@
   </div>
   <div style="flex:0 0 auto;">
     <button type="submit">Apply range</button>
-    <% if (filters.from || filters.to) { %>
-      <a href="/admin/cleaners" class="btn secondary" style="margin-left:0.4rem;">Clear</a>
+    <% if (!filters.isDefault) { %>
+      <a href="/admin/cleaners" class="btn secondary" style="margin-left:0.4rem;">Reset to last 4 weeks</a>
     <% } %>
   </div>
   <div class="muted-small" style="flex:1 1 100%;">
-    Filters every weekly table on this page (top dashboard + each cleaner's history).
+    Defaults to the trailing 4 weeks. Filters every weekly table on this page (top dashboard + each cleaner's history).
   </div>
 </form>
 

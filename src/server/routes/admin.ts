@@ -19,9 +19,6 @@ import { parseVietnamLocal } from "../parseTime.js";
 import { computeDailyChecklist } from "../../services/automation.js";
 import {
   bookingsToCsv,
-  calculateAgentPerformance,
-  calculateCleanerPerformance,
-  calculateOccupancy,
   calculateRevenueSummary,
   rowsToCsv,
 } from "../../services/reports.js";
@@ -1990,14 +1987,20 @@ export function mountAdminRoutes(
     );
     const ledgerByAgent = ledgerByAgentMap();
     const paymentsByAgent = agentPaymentsByAgentMap();
-    const fromIso =
+    const fromQ =
       typeof req.query.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)
         ? req.query.from
         : "";
-    const toIso =
+    const toQ =
       typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)
         ? req.query.to
         : "";
+    // Default window: trailing 4 weeks (Mon-of-this-week minus 3 weeks).
+    const defaultFromIso = isoMondayOf(
+      new Date(Date.now() - 3 * 7 * 86_400_000),
+    );
+    const fromIso = fromQ || defaultFromIso;
+    const toIso = toQ;
     const inRange = (wk: string) =>
       (!fromIso || wk >= fromIso) && (!toIso || wk <= toIso);
 
@@ -2070,7 +2073,9 @@ export function mountAdminRoutes(
       title: "Sales agents",
       agentRows,
       aggregateRows: filteredAggregate,
-      filters: { from: fromIso, to: toIso },
+      // Display the resolved window so users see what they're filtered to;
+      // separately expose whether it came from a query param so the Clear button only shows when relevant.
+      filters: { from: fromIso, to: toIso, isDefault: !fromQ && !toQ },
       countDiscountUsage: (discountId: string) =>
         Array.from(repo.bookings.values()).filter(
           (b) => b.discountIdApplied === discountId,
@@ -2667,14 +2672,19 @@ export function mountAdminRoutes(
     const cleaners = Array.from(repo.users.values()).filter(
       (u) => u.role === "cleaning_crew",
     );
-    const fromIso =
+    const fromQ =
       typeof req.query.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)
         ? req.query.from
         : "";
-    const toIso =
+    const toQ =
       typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)
         ? req.query.to
         : "";
+    const defaultFromIso = isoMondayOf(
+      new Date(Date.now() - 3 * 7 * 86_400_000),
+    );
+    const fromIso = fromQ || defaultFromIso;
+    const toIso = toQ;
     const inRange = (wk: string) =>
       (!fromIso || wk >= fromIso) && (!toIso || wk <= toIso);
     const jobsByCleaner = new Map<
@@ -2762,7 +2772,7 @@ export function mountAdminRoutes(
       title: "Cleaning crew",
       cleanerRows,
       aggregateRows: aggregateRows.filter((r) => inRange(r.weekStartIso)),
-      filters: { from: fromIso, to: toIso },
+      filters: { from: fromIso, to: toIso, isDefault: !fromQ && !toQ },
       allCleaners: cleaners,
       bookingForJob: (j: { bookingId: string }) =>
         allBookings.find((b) => b.id === j.bookingId),
@@ -3365,41 +3375,262 @@ export function mountAdminRoutes(
     return { from, to };
   }
 
+  // ---- Reports v2: bucketed by month/week, per-room ---------------
+  const VN_OFFSET = 7 * 60 * 60_000;
+  function vnDateKey(d: Date): string {
+    return new Date(d.getTime() + VN_OFFSET).toISOString().slice(0, 10);
+  }
+
+  function periodKeyOf(d: Date, granularity: "month" | "week"): string {
+    if (granularity === "month") return vnDateKey(d).slice(0, 7); // YYYY-MM
+    return isoMondayOf(d); // YYYY-MM-DD (Mon)
+  }
+
+  function periodLabel(key: string, granularity: "month" | "week"): string {
+    if (granularity === "month") return key;
+    return `wk ${key}`;
+  }
+
+  // Generate trailing N periods ending on the period containing `to`.
+  function trailingPeriods(
+    granularity: "month" | "week",
+    n: number,
+    to: Date,
+  ): string[] {
+    const out: string[] = [];
+    if (granularity === "month") {
+      const y = Number(vnDateKey(to).slice(0, 4));
+      const m = Number(vnDateKey(to).slice(5, 7)) - 1; // 0-indexed
+      for (let i = n - 1; i >= 0; i--) {
+        const dy = Math.floor((m - i) / 12);
+        const my = ((((m - i) % 12) + 12) % 12) + 1;
+        out.push(`${y + dy}-${String(my).padStart(2, "0")}`);
+      }
+    } else {
+      // weekly
+      const monRef = isoMondayOf(to);
+      const refMs = new Date(monRef + "T00:00:00Z").getTime();
+      for (let i = n - 1; i >= 0; i--) {
+        out.push(
+          new Date(refMs - i * 7 * 86_400_000).toISOString().slice(0, 10),
+        );
+      }
+    }
+    return out;
+  }
+
+  // Periods covering an explicit [from, to] range.
+  function periodsInRange(
+    granularity: "month" | "week",
+    from: Date,
+    to: Date,
+  ): string[] {
+    const out: string[] = [];
+    if (granularity === "month") {
+      let y = Number(vnDateKey(from).slice(0, 4));
+      let m = Number(vnDateKey(from).slice(5, 7));
+      const yEnd = Number(vnDateKey(to).slice(0, 4));
+      const mEnd = Number(vnDateKey(to).slice(5, 7));
+      while (y < yEnd || (y === yEnd && m <= mEnd)) {
+        out.push(`${y}-${String(m).padStart(2, "0")}`);
+        m += 1;
+        if (m > 12) {
+          m = 1;
+          y += 1;
+        }
+      }
+    } else {
+      let mon = new Date(isoMondayOf(from) + "T00:00:00Z").getTime();
+      const monEnd = new Date(isoMondayOf(to) + "T00:00:00Z").getTime();
+      while (mon <= monEnd) {
+        out.push(new Date(mon).toISOString().slice(0, 10));
+        mon += 7 * 86_400_000;
+      }
+    }
+    return out;
+  }
+
+  function bookingDays(b: import("../../domain/types.js").Booking): number {
+    if (b.bookingType === "hourly") {
+      const ms = b.checkOutAt.getTime() - b.checkInAt.getTime();
+      return Math.max(0, ms / (24 * 3_600_000));
+    }
+    if (b.bookingType === "day") return 1;
+    // multi_day: nights = diff of vietnam-local calendar dates
+    const a = vnDateKey(b.checkInAt);
+    const c = vnDateKey(b.checkOutAt);
+    const ms =
+      new Date(c + "T00:00:00Z").getTime() -
+      new Date(a + "T00:00:00Z").getTime();
+    return Math.max(1, Math.round(ms / 86_400_000));
+  }
+
+  type ReportMetrics = {
+    bookings: number;
+    daysBooked: number;
+    roomRevenueVnd: number;
+    minibarVnd: number;
+    discountsVnd: number;
+    commissionVnd: number;
+    cleaningFeesVnd: number;
+  };
+
+  function emptyMetrics(): ReportMetrics {
+    return {
+      bookings: 0,
+      daysBooked: 0,
+      roomRevenueVnd: 0,
+      minibarVnd: 0,
+      discountsVnd: 0,
+      commissionVnd: 0,
+      cleaningFeesVnd: 0,
+    };
+  }
+
+  function addMetrics(into: ReportMetrics, from: ReportMetrics) {
+    into.bookings += from.bookings;
+    into.daysBooked += from.daysBooked;
+    into.roomRevenueVnd += from.roomRevenueVnd;
+    into.minibarVnd += from.minibarVnd;
+    into.discountsVnd += from.discountsVnd;
+    into.commissionVnd += from.commissionVnd;
+    into.cleaningFeesVnd += from.cleaningFeesVnd;
+  }
+
   router.get("/reports", (req, res) => {
-    const range =
-      parseRange(req.query as Record<string, unknown>) ?? defaultRange();
-    const summary = calculateRevenueSummary({
-      bookings: repo.bookings.values(),
-      rooms: repo.rooms.values(),
-      range,
+    const granularity =
+      req.query.granularity === "week" ? ("week" as const) : ("month" as const);
+    const fromQ =
+      typeof req.query.from === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)
+        ? req.query.from
+        : "";
+    const toQ =
+      typeof req.query.to === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)
+        ? req.query.to
+        : "";
+    const isDefault = !fromQ && !toQ;
+
+    const now = new Date();
+    const periods = isDefault
+      ? trailingPeriods(granularity, 12, now)
+      : periodsInRange(
+          granularity,
+          new Date(`${fromQ}T00:00:00Z`),
+          new Date(`${toQ}T23:59:59Z`),
+        );
+    if (periods.length === 0) periods.push(periodKeyOf(now, granularity));
+    const periodSet = new Set(periods);
+
+    // Cleaning fees per booking (sum of fixedPay for completed jobs).
+    const cleaningFeeByBooking = new Map<string, number>();
+    for (const j of repo.cleaningJobs.values()) {
+      if (j.status !== "completed") continue;
+      cleaningFeeByBooking.set(
+        j.bookingId,
+        (cleaningFeeByBooking.get(j.bookingId) ?? 0) + j.fixedPayVnd,
+      );
+    }
+
+    const allRooms = Array.from(repo.rooms.values()).sort((a, b) =>
+      a.buildingId.localeCompare(b.buildingId) ||
+      (a.roomNumber || a.name).localeCompare(b.roomNumber || b.name),
+    );
+    const buildings = Array.from(repo.buildings.values());
+
+    // metricsByRoomPeriod[roomId][periodKey] = ReportMetrics
+    const metricsByRoomPeriod = new Map<string, Map<string, ReportMetrics>>();
+    for (const r of allRooms) {
+      const inner = new Map<string, ReportMetrics>();
+      for (const p of periods) inner.set(p, emptyMetrics());
+      metricsByRoomPeriod.set(r.id, inner);
+    }
+
+    for (const b of repo.bookings.values()) {
+      if (b.status === "cancelled" || b.status === "held") continue;
+      const period = periodKeyOf(b.checkInAt, granularity);
+      if (!periodSet.has(period)) continue;
+      const inner = metricsByRoomPeriod.get(b.roomId);
+      if (!inner) continue;
+      const cell = inner.get(period);
+      if (!cell) continue;
+      cell.bookings += 1;
+      cell.daysBooked += bookingDays(b);
+      cell.roomRevenueVnd += b.finalRoomChargeVnd;
+      cell.minibarVnd += b.minibarChargesVnd ?? 0;
+      cell.discountsVnd += b.discountAmountVnd ?? 0;
+      cell.commissionVnd += b.calculatedCommissionVnd ?? 0;
+      cell.cleaningFeesVnd += cleaningFeeByBooking.get(b.id) ?? 0;
+    }
+
+    // Build building rollups and grand total per period.
+    type RowGroup = {
+      key: string;
+      label: string;
+      perPeriod: Map<string, ReportMetrics>;
+      total: ReportMetrics;
+    };
+    const buildingGroups: RowGroup[] = buildings.map((bld) => {
+      const perPeriod = new Map<string, ReportMetrics>();
+      for (const p of periods) perPeriod.set(p, emptyMetrics());
+      const total = emptyMetrics();
+      for (const r of allRooms) {
+        if (r.buildingId !== bld.id) continue;
+        const inner = metricsByRoomPeriod.get(r.id)!;
+        for (const p of periods) {
+          addMetrics(perPeriod.get(p)!, inner.get(p)!);
+        }
+      }
+      for (const p of periods) addMetrics(total, perPeriod.get(p)!);
+      return { key: bld.id, label: bld.name, perPeriod, total };
     });
-    const occupancy = calculateOccupancy({
-      bookings: repo.bookings.values(),
-      rooms: repo.rooms.values(),
-      range,
+    const grandPerPeriod = new Map<string, ReportMetrics>();
+    for (const p of periods) grandPerPeriod.set(p, emptyMetrics());
+    const grandTotal = emptyMetrics();
+    for (const g of buildingGroups) {
+      for (const p of periods) addMetrics(grandPerPeriod.get(p)!, g.perPeriod.get(p)!);
+      addMetrics(grandTotal, g.total);
+    }
+
+    // Per-room totals and per-period rows for detail tables.
+    const roomTotals = new Map<string, ReportMetrics>();
+    const roomPerPeriod: Array<{
+      room: import("../../domain/types.js").Room;
+      buildingName: string;
+      perPeriod: Array<{ period: string; m: ReportMetrics }>;
+      total: ReportMetrics;
+    }> = allRooms.map((r) => {
+      const inner = metricsByRoomPeriod.get(r.id)!;
+      const total = emptyMetrics();
+      const list = periods.map((p) => {
+        const m = inner.get(p)!;
+        addMetrics(total, m);
+        return { period: p, m };
+      });
+      roomTotals.set(r.id, total);
+      const bld = repo.buildings.get(r.buildingId);
+      return {
+        room: r,
+        buildingName: bld ? bld.name : "—",
+        perPeriod: list,
+        total,
+      };
     });
-    const agentPerf = calculateAgentPerformance({
-      bookings: repo.bookings.values(),
-      ledger: repo.commissionLedger.values(),
-      range,
-    });
-    const cleanerPerf = calculateCleanerPerformance({
-      cleaningJobs: repo.cleaningJobs.values(),
-      profiles: repo.cleaningCrewProfiles.values(),
-      range,
-    });
+
     res.render("admin/reports", {
       title: "Reports",
-      range: {
-        from: range.from.toISOString().slice(0, 10),
-        to: range.to.toISOString().slice(0, 10),
-      },
-      summary,
-      occupancy,
-      agentPerf,
-      cleanerPerf,
-      rooms: repo.rooms,
-      users: repo.users,
+      granularity,
+      filters: { from: fromQ, to: toQ, isDefault },
+      periods,
+      periodLabels: periods.map((p) => periodLabel(p, granularity)),
+      buildingGroups,
+      grandPerPeriod: periods.map((p) => ({
+        period: p,
+        m: grandPerPeriod.get(p)!,
+      })),
+      grandTotal,
+      roomReports: roomPerPeriod,
     });
   });
 
