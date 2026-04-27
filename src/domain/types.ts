@@ -66,14 +66,34 @@ export interface Building {
   district?: string;
 }
 
+export interface HourlyTierRates {
+  /** Flat rate for stays up to 2 hours. */
+  rate2hVnd?: number;
+  rate4hVnd?: number;
+  rate6hVnd?: number;
+  rate8hVnd?: number;
+  rate12hVnd?: number;
+}
+
 export interface Room {
   id: Id;
   buildingId: Id;
   name: string;
   roomNumber?: string;
   maxGuests: number;
+  /**
+   * Default day rate. Used as the fallback when neither the per-day calendar
+   * row nor `baseWeekendRateVnd` (for Sat/Sun) carries a more specific value.
+   */
   baseDayRateVnd: number;
+  /** Optional weekend rate (Sat/Sun). Falls back to baseDayRateVnd. */
+  baseWeekendRateVnd?: number;
+  /** Per-hour fallback when no tier covers the requested duration. */
   baseHourlyRateVnd: number;
+  /** Flat tier prices for short stays. Smallest tier ≥ duration wins. */
+  baseHourlyTiers?: HourlyTierRates;
+  /** When false, the room cannot be booked hourly. Defaults to true. */
+  hourlyEnabled?: boolean;
   isActive: boolean;
   description?: string;
   features?: string[];
@@ -90,6 +110,12 @@ export interface RoomDailyRate {
   rateDate: string;
   dayRateVnd: number;
   hourlyRateVnd: number;
+  /** Optional override of the per-tier hourly prices for this date. */
+  hourlyTiers?: HourlyTierRates;
+  /** Marks the date as special (e.g. public holiday) for UI surfacing. */
+  isSpecial?: boolean;
+  /** Free-form note (e.g. "Tet holiday", "Long weekend"). */
+  note?: string;
 }
 
 export interface Booking {

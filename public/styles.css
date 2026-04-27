@@ -321,6 +321,11 @@ tr:hover td { background: #fafaf2; }
 .month-bar.refund_pending,
 .month-bar.extra_payment_required { background: #b03030; }
 
+/* Pricing table row highlights */
+table tr.weekend td { background: #fafaf2; }
+table tr.special td { background: #fff5e6; }
+table tr.special.weekend td { background: #fff0d8; }
+
 /* Video embed (YouTube/Vimeo/Drive) */
 .vid-embed {
   width: 100%;

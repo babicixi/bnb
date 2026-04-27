@@ -129,6 +129,14 @@ export function normalizeBookingTimes(
 }
 
 export function calculateBookingPrice(input: BookingPriceInput): BookingPrice {
+  if (
+    input.bookingType === "hourly" &&
+    input.room.hourlyEnabled === false
+  ) {
+    throw new Error(
+      `${input.room.name} is not available for hourly bookings.`,
+    );
+  }
   const normalized = normalizeBookingTimes(
     input.bookingType,
     input.checkInAt,
@@ -169,17 +177,53 @@ export function calculateBookingPrice(input: BookingPriceInput): BookingPrice {
   };
 }
 
+/**
+ * Tier structure: { hours: 2, vnd: number }, … sorted ascending by hours.
+ * Smallest tier whose `hours` ≥ requested duration wins. Falls back to
+ * `hours × hourlyRateVnd` when no tier covers the duration.
+ */
+const TIER_HOURS: Array<{ hours: number; key: keyof import("../domain/types.js").HourlyTierRates }> = [
+  { hours: 2, key: "rate2hVnd" },
+  { hours: 4, key: "rate4hVnd" },
+  { hours: 6, key: "rate6hVnd" },
+  { hours: 8, key: "rate8hVnd" },
+  { hours: 12, key: "rate12hVnd" },
+];
+
+function pickHourlyTier(
+  hours: number,
+  perHourVnd: number,
+  tiers: import("../domain/types.js").HourlyTierRates | undefined,
+  roomTiers: import("../domain/types.js").HourlyTierRates | undefined,
+): number {
+  if (tiers) {
+    for (const t of TIER_HOURS) {
+      if (hours <= t.hours && tiers[t.key] !== undefined) {
+        return tiers[t.key] as number;
+      }
+    }
+  }
+  if (roomTiers) {
+    for (const t of TIER_HOURS) {
+      if (hours <= t.hours && roomTiers[t.key] !== undefined) {
+        return roomTiers[t.key] as number;
+      }
+    }
+  }
+  return Math.max(1, hours) * perHourVnd;
+}
+
 function calculateHourlyCharge(
   room: Room,
   rates: RoomDailyRate[],
   checkInAt: Date,
   checkOutAt: Date,
 ): number {
-  const rate = findRate(room, rates, vietnamDateKey(checkInAt));
+  const rate = findRate(room, rates, checkInAt);
   const hours = Math.ceil(
     (checkOutAt.getTime() - checkInAt.getTime()) / 3_600_000,
   );
-  return Math.max(1, hours) * rate.hourlyRateVnd;
+  return pickHourlyTier(hours, rate.hourlyRateVnd, rate.hourlyTiers, room.baseHourlyTiers);
 }
 
 function calculateDayCharge(
@@ -191,12 +235,37 @@ function calculateDayCharge(
   const keys = vietnamDateKeysBetween(checkInAt, checkOutAt);
   const billableKeys = keys.length > 0 ? keys : [vietnamDateKey(checkInAt)];
   return billableKeys.reduce(
-    (sum, key) => sum + findRate(room, rates, key).dayRateVnd,
+    (sum, key) => sum + findRateForKey(room, rates, key).dayRateVnd,
     0,
   );
 }
 
+function isWeekendKey(rateDate: string): boolean {
+  // rateDate is YYYY-MM-DD treated as UTC. Sat=6, Sun=0.
+  const day = new Date(`${rateDate}T00:00:00Z`).getUTCDay();
+  return day === 0 || day === 6;
+}
+
+/**
+ * Default rate for a date when no per-day override exists. Picks the
+ * room's weekend rate on Sat/Sun if set, otherwise the base day rate.
+ */
+function defaultDayRate(room: Room, rateDate: string): number {
+  if (isWeekendKey(rateDate) && room.baseWeekendRateVnd !== undefined) {
+    return room.baseWeekendRateVnd;
+  }
+  return room.baseDayRateVnd;
+}
+
 function findRate(
+  room: Room,
+  rates: RoomDailyRate[],
+  checkInAt: Date,
+): RoomDailyRate {
+  return findRateForKey(room, rates, vietnamDateKey(checkInAt));
+}
+
+function findRateForKey(
   room: Room,
   rates: RoomDailyRate[],
   rateDate: string,
@@ -207,7 +276,7 @@ function findRate(
     ) ?? {
       roomId: room.id,
       rateDate,
-      dayRateVnd: room.baseDayRateVnd,
+      dayRateVnd: defaultDayRate(room, rateDate),
       hourlyRateVnd: room.baseHourlyRateVnd,
     }
   );

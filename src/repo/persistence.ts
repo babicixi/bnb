@@ -39,12 +39,15 @@ function reviver(_key: string, value: unknown): unknown {
     return new Date(value);
   }
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    const v = value as { __type?: string; entries?: unknown; iso?: string };
+    const v = value as { __type?: string; entries?: unknown; iso?: unknown };
     if (v.__type === REVIVE_MAP && Array.isArray(v.entries)) {
       return new Map(v.entries as Array<[unknown, unknown]>);
     }
-    if (v.__type === REVIVE_DATE && typeof v.iso === "string") {
-      return new Date(v.iso);
+    if (v.__type === REVIVE_DATE) {
+      // `iso` may already be a Date if the lenient string→Date branch above
+      // converted it during the depth-first walk. Accept either form.
+      if (v.iso instanceof Date) return v.iso;
+      if (typeof v.iso === "string") return new Date(v.iso);
     }
   }
   return value;

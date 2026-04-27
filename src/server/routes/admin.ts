@@ -1071,6 +1071,13 @@ export function mountAdminRoutes(
     rateDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     dayRateK: z.coerce.number().nonnegative(),
     hourlyRateK: z.coerce.number().nonnegative(),
+    rate2hK: z.string().optional(),
+    rate4hK: z.string().optional(),
+    rate6hK: z.string().optional(),
+    rate8hK: z.string().optional(),
+    rate12hK: z.string().optional(),
+    isSpecial: z.string().optional(),
+    note: z.string().optional(),
   });
 
   router.post("/pricing/edit", (req, res) => {
@@ -1083,6 +1090,9 @@ export function mountAdminRoutes(
     }
     const dayRateVnd = Math.round(parsed.data.dayRateK * 1000);
     const hourlyRateVnd = Math.round(parsed.data.hourlyRateK * 1000);
+    const tiers = parseTiersK(parsed.data);
+    const isSpecial = parsed.data.isSpecial === "1";
+    const note = parsed.data.note?.trim() || undefined;
     const before = repo.rates.find(
       (r) =>
         r.roomId === parsed.data.roomId && r.rateDate === parsed.data.rateDate,
@@ -1091,12 +1101,18 @@ export function mountAdminRoutes(
     if (before) {
       before.dayRateVnd = dayRateVnd;
       before.hourlyRateVnd = hourlyRateVnd;
+      before.hourlyTiers = tiers;
+      before.isSpecial = isSpecial || undefined;
+      before.note = note;
     } else {
       repo.rates.push({
         roomId: parsed.data.roomId,
         rateDate: parsed.data.rateDate,
         dayRateVnd,
         hourlyRateVnd,
+        hourlyTiers: tiers,
+        isSpecial: isSpecial || undefined,
+        note,
       });
     }
     audit(repo, req, {
@@ -1104,7 +1120,14 @@ export function mountAdminRoutes(
       entityType: "room_daily_rate",
       entityId: `${parsed.data.roomId}@${parsed.data.rateDate}`,
       before: beforeSnapshot,
-      after: { ...parsed.data, dayRateVnd, hourlyRateVnd },
+      after: {
+        ...parsed.data,
+        dayRateVnd,
+        hourlyRateVnd,
+        hourlyTiers: tiers,
+        isSpecial,
+        note,
+      },
     });
     res.redirect(`/admin/pricing?roomId=${parsed.data.roomId}&flash=saved`);
   });
@@ -1113,9 +1136,16 @@ export function mountAdminRoutes(
     roomId: z.string(),
     fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    dayRateK: z.coerce.number().nonnegative(),
-    hourlyRateK: z.coerce.number().nonnegative(),
-    weekdayOnly: z.string().optional(),
+    weekdayRateK: z.string().optional(),
+    weekendRateK: z.string().optional(),
+    hourlyRateK: z.string().optional(),
+    rate2hK: z.string().optional(),
+    rate4hK: z.string().optional(),
+    rate6hK: z.string().optional(),
+    rate8hK: z.string().optional(),
+    rate12hK: z.string().optional(),
+    markSpecial: z.string().optional(),
+    note: z.string().optional(),
   });
 
   router.post("/pricing/bulk", (req, res) => {
@@ -1136,38 +1166,56 @@ export function mountAdminRoutes(
       res.status(400).render("error", { title: "Bad date range", message: "" });
       return;
     }
-    const dayRateVnd = Math.round(parsed.data.dayRateK * 1000);
-    const hourlyRateVnd = Math.round(parsed.data.hourlyRateK * 1000);
+    const weekdayRateVnd = parseOptionalK(parsed.data.weekdayRateK);
+    const weekendRateVnd = parseOptionalK(parsed.data.weekendRateK);
+    const hourlyRateVnd = parseOptionalK(parsed.data.hourlyRateK);
+    const tiers = parseTiersK(parsed.data);
+    const markSpecial = parsed.data.markSpecial === "1";
+    const note = parsed.data.note?.trim() || undefined;
+
     let cursor = start;
     let count = 0;
     while (cursor <= end) {
       const dateKey = cursor.toISOString().slice(0, 10);
       const dow = cursor.getUTCDay();
-      const isWeekday = dow >= 1 && dow <= 5;
-      if (!parsed.data.weekdayOnly || isWeekday) {
-        const existing = repo.rates.find(
-          (r) => r.roomId === parsed.data.roomId && r.rateDate === dateKey,
-        );
-        if (existing) {
-          existing.dayRateVnd = dayRateVnd;
-          existing.hourlyRateVnd = hourlyRateVnd;
-        } else {
-          repo.rates.push({
-            roomId: parsed.data.roomId,
-            rateDate: dateKey,
-            dayRateVnd,
-            hourlyRateVnd,
-          });
-        }
-        count += 1;
+      const isWeekend = dow === 0 || dow === 6;
+      const targetDayRate = isWeekend
+        ? (weekendRateVnd ?? weekdayRateVnd)
+        : weekdayRateVnd;
+      let existing = repo.rates.find(
+        (r) => r.roomId === parsed.data.roomId && r.rateDate === dateKey,
+      );
+      if (!existing) {
+        existing = {
+          roomId: parsed.data.roomId,
+          rateDate: dateKey,
+          dayRateVnd: targetDayRate ?? 0,
+          hourlyRateVnd: hourlyRateVnd ?? 0,
+        };
+        repo.rates.push(existing);
       }
+      if (targetDayRate !== undefined) existing.dayRateVnd = targetDayRate;
+      if (hourlyRateVnd !== undefined) existing.hourlyRateVnd = hourlyRateVnd;
+      if (tiers) existing.hourlyTiers = tiers;
+      if (markSpecial) existing.isSpecial = true;
+      if (note !== undefined) existing.note = note;
+      count += 1;
       cursor = new Date(cursor.getTime() + 24 * 60 * 60_000);
     }
     audit(repo, req, {
       action: "pricing.bulk_edit",
       entityType: "room_daily_rate",
       entityId: parsed.data.roomId,
-      after: { ...parsed.data, dayRateVnd, hourlyRateVnd, count },
+      after: {
+        ...parsed.data,
+        weekdayRateVnd,
+        weekendRateVnd,
+        hourlyRateVnd,
+        tiers,
+        markSpecial,
+        note,
+        count,
+      },
     });
     res.redirect(
       `/admin/pricing?roomId=${parsed.data.roomId}&flash=bulk-${count}`,
@@ -1295,13 +1343,51 @@ export function mountAdminRoutes(
     roomNumber: z.string().optional(),
     maxGuests: z.coerce.number().int().positive(),
     baseDayRateK: z.coerce.number().nonnegative(),
+    baseWeekendRateK: z.string().optional(),
     baseHourlyRateK: z.coerce.number().nonnegative(),
+    rate2hK: z.string().optional(),
+    rate4hK: z.string().optional(),
+    rate6hK: z.string().optional(),
+    rate8hK: z.string().optional(),
+    rate12hK: z.string().optional(),
+    hourlyEnabled: z.string().optional(),
     description: z.string().optional(),
     features: z.string().optional(),
     photoUrls: z.string().optional(),
     videoUrls: z.string().optional(),
     isActive: z.string().optional(),
   });
+
+  function parseTiersK(data: {
+    rate2hK?: string;
+    rate4hK?: string;
+    rate6hK?: string;
+    rate8hK?: string;
+    rate12hK?: string;
+  }): import("../../domain/types.js").HourlyTierRates | undefined {
+    const t: import("../../domain/types.js").HourlyTierRates = {};
+    const set = (
+      v: string | undefined,
+      k: keyof import("../../domain/types.js").HourlyTierRates,
+    ) => {
+      if (v === undefined || v === "") return;
+      const n = Number(v);
+      if (Number.isFinite(n) && n >= 0) t[k] = Math.round(n * 1000);
+    };
+    set(data.rate2hK, "rate2hVnd");
+    set(data.rate4hK, "rate4hVnd");
+    set(data.rate6hK, "rate6hVnd");
+    set(data.rate8hK, "rate8hVnd");
+    set(data.rate12hK, "rate12hVnd");
+    return Object.keys(t).length > 0 ? t : undefined;
+  }
+
+  function parseOptionalK(value: string | undefined): number | undefined {
+    if (value === undefined || value === "") return undefined;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return undefined;
+    return Math.round(n * 1000);
+  }
 
   router.post(
     "/properties/rooms",
@@ -1325,7 +1411,10 @@ export function mountAdminRoutes(
         roomNumber: parsed.data.roomNumber || undefined,
         maxGuests: parsed.data.maxGuests,
         baseDayRateVnd: Math.round(parsed.data.baseDayRateK * 1000),
+        baseWeekendRateVnd: parseOptionalK(parsed.data.baseWeekendRateK),
         baseHourlyRateVnd: Math.round(parsed.data.baseHourlyRateK * 1000),
+        baseHourlyTiers: parseTiersK(parsed.data),
+        hourlyEnabled: parsed.data.hourlyEnabled !== "0",
         isActive: parsed.data.isActive !== "0",
         description: parsed.data.description || undefined,
         features: parseLines(parsed.data.features),
@@ -1367,7 +1456,10 @@ export function mountAdminRoutes(
       room.roomNumber = parsed.data.roomNumber || undefined;
       room.maxGuests = parsed.data.maxGuests;
       room.baseDayRateVnd = Math.round(parsed.data.baseDayRateK * 1000);
+      room.baseWeekendRateVnd = parseOptionalK(parsed.data.baseWeekendRateK);
       room.baseHourlyRateVnd = Math.round(parsed.data.baseHourlyRateK * 1000);
+      room.baseHourlyTiers = parseTiersK(parsed.data);
+      room.hourlyEnabled = parsed.data.hourlyEnabled !== "0";
       room.isActive = parsed.data.isActive !== "0";
       room.description = parsed.data.description || undefined;
       room.features = parseLines(parsed.data.features);

@@ -375,6 +375,125 @@ describe("pricing", () => {
     expect(agentOnePrice.discountAmountVnd).toBe(200_000);
     expect(agentTwoPrice.discountAmountVnd).toBe(0);
   });
+
+  it("hourly tier picks the smallest tier covering the duration", () => {
+    const tieredRoom: Room = {
+      ...room,
+      baseHourlyTiers: {
+        rate2hVnd: 200_000,
+        rate4hVnd: 350_000,
+        rate6hVnd: 480_000,
+      },
+    };
+    const r2 = calculateBookingPrice({
+      bookingType: "hourly",
+      checkInAt: d("2026-05-01T10:00:00+07:00"),
+      checkOutAt: d("2026-05-01T12:00:00+07:00"),
+      room: tieredRoom,
+      rates,
+    });
+    expect(r2.roomChargeVnd).toBe(200_000);
+
+    const r3 = calculateBookingPrice({
+      bookingType: "hourly",
+      checkInAt: d("2026-05-01T10:00:00+07:00"),
+      checkOutAt: d("2026-05-01T13:00:00+07:00"),
+      room: tieredRoom,
+      rates,
+    });
+    expect(r3.roomChargeVnd).toBe(350_000);
+
+    const r5 = calculateBookingPrice({
+      bookingType: "hourly",
+      checkInAt: d("2026-05-01T10:00:00+07:00"),
+      checkOutAt: d("2026-05-01T15:00:00+07:00"),
+      room: tieredRoom,
+      rates,
+    });
+    expect(r5.roomChargeVnd).toBe(480_000);
+  });
+
+  it("hourly with no tier covering duration falls back to per-hour", () => {
+    const tieredRoom: Room = {
+      ...room,
+      baseHourlyRateVnd: 100_000,
+      baseHourlyTiers: { rate2hVnd: 200_000 }, // only 2h tier defined
+    };
+    const r5 = calculateBookingPrice({
+      bookingType: "hourly",
+      checkInAt: d("2026-05-01T10:00:00+07:00"),
+      checkOutAt: d("2026-05-01T15:00:00+07:00"),
+      room: tieredRoom,
+      rates: [], // no per-day overrides
+    });
+    expect(r5.roomChargeVnd).toBe(500_000); // 5h * 100k
+  });
+
+  it("calculateBookingPrice rejects hourly when room.hourlyEnabled is false", () => {
+    const dayOnlyRoom: Room = { ...room, hourlyEnabled: false };
+    expect(() =>
+      calculateBookingPrice({
+        bookingType: "hourly",
+        checkInAt: d("2026-05-01T10:00:00+07:00"),
+        checkOutAt: d("2026-05-01T13:00:00+07:00"),
+        room: dayOnlyRoom,
+        rates,
+      }),
+    ).toThrow(/not available for hourly/);
+  });
+
+  it("weekend rate falls back to weekend default when no per-day override", () => {
+    const weekendRoom: Room = {
+      ...room,
+      baseDayRateVnd: 1_000_000,
+      baseWeekendRateVnd: 1_500_000,
+    };
+    // 2026-05-02 is a Saturday → weekend rate applies
+    const sat = calculateBookingPrice({
+      bookingType: "day",
+      checkInAt: d("2026-05-02T15:00:00+07:00"),
+      checkOutAt: d("2026-05-03T11:00:00+07:00"),
+      room: weekendRoom,
+      rates: [],
+    });
+    expect(sat.roomChargeVnd).toBe(1_500_000);
+
+    // 2026-05-04 is a Monday → weekday rate
+    const mon = calculateBookingPrice({
+      bookingType: "day",
+      checkInAt: d("2026-05-04T15:00:00+07:00"),
+      checkOutAt: d("2026-05-05T11:00:00+07:00"),
+      room: weekendRoom,
+      rates: [],
+    });
+    expect(mon.roomChargeVnd).toBe(1_000_000);
+  });
+
+  it("per-day rate override beats weekend default", () => {
+    const weekendRoom: Room = {
+      ...room,
+      baseDayRateVnd: 1_000_000,
+      baseWeekendRateVnd: 1_500_000,
+    };
+    // Saturday with explicit holiday override
+    const overridden = calculateBookingPrice({
+      bookingType: "day",
+      checkInAt: d("2026-05-02T15:00:00+07:00"),
+      checkOutAt: d("2026-05-03T11:00:00+07:00"),
+      room: weekendRoom,
+      rates: [
+        {
+          roomId: "room-1",
+          rateDate: "2026-05-02",
+          dayRateVnd: 2_000_000,
+          hourlyRateVnd: 200_000,
+          isSpecial: true,
+          note: "Labour day weekend",
+        },
+      ],
+    });
+    expect(overridden.roomChargeVnd).toBe(2_000_000);
+  });
 });
 
 describe("payments and permissions", () => {
