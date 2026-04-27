@@ -223,4 +223,17 @@
     <p><button type="submit">Save notes</button></p>
   </form>
 </div>
+
+<div class="card">
+  <h2>Permanently delete</h2>
+  <p class="muted-small">
+    Removes this booking and everything attached to it (payments, proofs,
+    cleaning job, cancellation request, commission ledger entry, minibar
+    usage). Cannot be undone. Best used on cancelled/closed bookings or
+    obvious test data.
+  </p>
+  <form method="post" action="/admin/bookings/<%= booking.id %>/delete" onsubmit="return confirm('Permanently delete <%= booking.bookingNumber %>? This cannot be undone.')">
+    <button type="submit" class="danger">Permanently delete this booking</button>
+  </form>
+</div>
 <%- include('../_footer') %>

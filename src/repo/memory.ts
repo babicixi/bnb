@@ -98,11 +98,46 @@ export function createRepository(): Repository {
   };
 }
 
-export function nextBookingNumber(repo: Repository, now = new Date()): string {
+/**
+ * Build a human-readable booking number of the form
+ *   `RoomSlug-BuildingSlug-YYYY.MM.DD-N`
+ * where N counts existing bookings on the same room and same Vietnam
+ * check-in date (so the second booking of room A on May 1 becomes -2).
+ *
+ * Falls back to `BNB-YYYYMMDD-N` if room or building info is missing
+ * (so callers without room context still get a unique number).
+ */
+export function nextBookingNumber(
+  repo: Repository,
+  options?: {
+    room?: Room;
+    building?: Building;
+    checkInAt?: Date;
+  },
+): string {
+  const slug = (s?: string) =>
+    (s ?? "").replace(/[^a-zA-Z0-9]/g, "").trim() || "X";
+  if (options?.room && options.checkInAt) {
+    const vnIso = vietnamDateKeyOf(options.checkInAt).replace(/-/g, ".");
+    const sameDayCount = Array.from(repo.bookings.values()).filter(
+      (b) =>
+        b.roomId === options.room!.id &&
+        vietnamDateKeyOf(b.checkInAt) === vietnamDateKeyOf(options.checkInAt!),
+    ).length;
+    return `${slug(options.room.name)}-${slug(options.building?.name)}-${vnIso}-${sameDayCount + 1}`;
+  }
   repo.bookingNumberCounter.value += 1;
+  const now = new Date();
   const ymd = now.toISOString().slice(0, 10).replace(/-/g, "");
   const seq = String(repo.bookingNumberCounter.value).padStart(4, "0");
   return `BNB-${ymd}-${seq}`;
+}
+
+const VIETNAM_OFFSET_MS_FOR_KEY = 7 * 60 * 60_000;
+function vietnamDateKeyOf(d: Date): string {
+  return new Date(d.getTime() + VIETNAM_OFFSET_MS_FOR_KEY)
+    .toISOString()
+    .slice(0, 10);
 }
 
 export function nextId(prefix: string): Id {

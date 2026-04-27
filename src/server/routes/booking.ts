@@ -261,7 +261,11 @@ export function mountBookingRoutes(
       },
     });
 
-    const bookingNumber = nextBookingNumber(repo);
+    const bookingNumber = nextBookingNumber(repo, {
+      room,
+      building: repo.buildings.get(room.buildingId),
+      checkInAt: priceCheck.checkInAt,
+    });
     const { booking, payment } = createBookingFromHold({
       id: nextId("booking"),
       bookingNumber,

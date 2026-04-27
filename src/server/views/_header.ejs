@@ -6,7 +6,7 @@
   <title><%= title %> · <%= t('site.title') %></title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
+<body class="<%= typeof bodyClass !== 'undefined' && bodyClass ? bodyClass : '' %>">
   <header>
     <a class="brand" href="/"><%= t('site.title') %></a>
     <nav>

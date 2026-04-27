@@ -540,6 +540,10 @@ export function mountAdminRoutes(
 
   const router = Router();
   router.use(requireRole("admin", "manager"));
+  router.use((_req, res, next) => {
+    res.locals.bodyClass = "wide-page";
+    next();
+  });
 
   router.get("/", (req, res) => {
     const filters = filterSchema.parse(req.query);
@@ -791,6 +795,84 @@ export function mountAdminRoutes(
         message: (err as Error).message,
       });
     }
+  });
+
+  router.post("/bookings/:id/delete", (req, res) => {
+    const booking = repo.bookings.get(req.params.id);
+    if (!booking) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    // Cascade: drop everything that referenced this booking.
+    for (const p of Array.from(repo.payments.values())) {
+      if (p.bookingId === booking.id) repo.payments.delete(p.id);
+    }
+    for (const p of Array.from(repo.paymentProofs.values())) {
+      if (p.bookingId === booking.id) repo.paymentProofs.delete(p.id);
+    }
+    for (const j of Array.from(repo.cleaningJobs.values())) {
+      if (j.bookingId === booking.id) repo.cleaningJobs.delete(j.id);
+    }
+    for (const c of Array.from(repo.cancellationRequests.values())) {
+      if (c.bookingId === booking.id) repo.cancellationRequests.delete(c.id);
+    }
+    for (const e of Array.from(repo.commissionLedger.values())) {
+      if (e.bookingId === booking.id) repo.commissionLedger.delete(e.id);
+    }
+    repo.minibarUsage = repo.minibarUsage.filter(
+      (u) => u.bookingId !== booking.id,
+    );
+    repo.bookingsByNumber.delete(booking.bookingNumber);
+    repo.bookings.delete(booking.id);
+    audit(repo, req, {
+      action: "booking.delete",
+      entityType: "booking",
+      entityId: booking.id,
+      before: {
+        bookingNumber: booking.bookingNumber,
+        status: booking.status,
+        guestId: booking.guestId,
+        roomId: booking.roomId,
+      },
+    });
+    res.redirect("/admin");
+  });
+
+  router.post("/bookings/_bulk/delete-cancelled", (req, res) => {
+    const removed: string[] = [];
+    for (const b of Array.from(repo.bookings.values())) {
+      if (b.status === "cancelled" || b.status === "closed") {
+        repo.bookings.delete(b.id);
+        repo.bookingsByNumber.delete(b.bookingNumber);
+        // Cascade like the per-booking delete above.
+        for (const p of Array.from(repo.payments.values())) {
+          if (p.bookingId === b.id) repo.payments.delete(p.id);
+        }
+        for (const p of Array.from(repo.paymentProofs.values())) {
+          if (p.bookingId === b.id) repo.paymentProofs.delete(p.id);
+        }
+        for (const j of Array.from(repo.cleaningJobs.values())) {
+          if (j.bookingId === b.id) repo.cleaningJobs.delete(j.id);
+        }
+        for (const c of Array.from(repo.cancellationRequests.values())) {
+          if (c.bookingId === b.id) repo.cancellationRequests.delete(c.id);
+        }
+        for (const e of Array.from(repo.commissionLedger.values())) {
+          if (e.bookingId === b.id) repo.commissionLedger.delete(e.id);
+        }
+        repo.minibarUsage = repo.minibarUsage.filter(
+          (u) => u.bookingId !== b.id,
+        );
+        removed.push(b.bookingNumber);
+      }
+    }
+    audit(repo, req, {
+      action: "booking.bulk_delete_cancelled",
+      entityType: "booking",
+      entityId: "*",
+      after: { count: removed.length, removed },
+    });
+    res.redirect("/admin");
   });
 
   router.post("/bookings/:id/cancel", (req, res) => {
@@ -1099,10 +1181,10 @@ export function mountAdminRoutes(
       req.query.roomId ?? Array.from(repo.rooms.keys())[0] ?? "",
     );
     const room = repo.rooms.get(roomId);
+    const today = new Date().toISOString().slice(0, 10);
     const rates = repo.rates
-      .filter((r) => r.roomId === roomId)
-      .sort((a, b) => a.rateDate.localeCompare(b.rateDate))
-      .slice(0, 60);
+      .filter((r) => r.roomId === roomId && r.rateDate >= today)
+      .sort((a, b) => a.rateDate.localeCompare(b.rateDate));
     res.render("admin/pricing", {
       title: "Pricing",
       rooms: Array.from(repo.rooms.values()),
@@ -1110,6 +1192,40 @@ export function mountAdminRoutes(
       rates,
       flash: req.query.flash || null,
     });
+  });
+
+  // Remove a single per-day override.
+  router.post("/pricing/remove", (req, res) => {
+    const roomId = String(req.body.roomId ?? "");
+    const rateDate = String(req.body.rateDate ?? "");
+    const idx = repo.rates.findIndex(
+      (r) => r.roomId === roomId && r.rateDate === rateDate,
+    );
+    if (idx >= 0) {
+      const before = repo.rates[idx];
+      repo.rates.splice(idx, 1);
+      audit(repo, req, {
+        action: "pricing.remove",
+        entityType: "room_daily_rate",
+        entityId: `${roomId}@${rateDate}`,
+        before: before as unknown as Record<string, unknown>,
+      });
+    }
+    res.redirect(`/admin/pricing?roomId=${roomId}&flash=removed`);
+  });
+
+  // Clear all overrides for a room (useful when seed left a backlog).
+  router.post("/pricing/clear-all", (req, res) => {
+    const roomId = String(req.body.roomId ?? "");
+    const removed = repo.rates.filter((r) => r.roomId === roomId).length;
+    repo.rates = repo.rates.filter((r) => r.roomId !== roomId);
+    audit(repo, req, {
+      action: "pricing.clear_all",
+      entityType: "room_daily_rate",
+      entityId: roomId,
+      after: { removed },
+    });
+    res.redirect(`/admin/pricing?roomId=${roomId}&flash=cleared`);
   });
 
   // Rates come in from the form in thousands of VND ("900" → 900,000) so the
@@ -1462,8 +1578,8 @@ export function mountAdminRoutes(
         baseWeekendRateVnd: parseOptionalK(parsed.data.baseWeekendRateK),
         baseHourlyRateVnd: Math.round(parsed.data.baseHourlyRateK * 1000),
         baseHourlyTiers: parseTiersK(parsed.data),
-        hourlyEnabled: parsed.data.hourlyEnabled !== "0",
-        isActive: parsed.data.isActive !== "0",
+        hourlyEnabled: parsed.data.hourlyEnabled === "1",
+        isActive: parsed.data.isActive === "1",
         description: parsed.data.description || undefined,
         features: parseLines(parsed.data.features),
         photoUrls: [...parseLines(parsed.data.photoUrls), ...uploadedPhotoUrls],
@@ -1507,8 +1623,8 @@ export function mountAdminRoutes(
       room.baseWeekendRateVnd = parseOptionalK(parsed.data.baseWeekendRateK);
       room.baseHourlyRateVnd = Math.round(parsed.data.baseHourlyRateK * 1000);
       room.baseHourlyTiers = parseTiersK(parsed.data);
-      room.hourlyEnabled = parsed.data.hourlyEnabled !== "0";
-      room.isActive = parsed.data.isActive !== "0";
+      room.hourlyEnabled = parsed.data.hourlyEnabled === "1";
+      room.isActive = parsed.data.isActive === "1";
       room.description = parsed.data.description || undefined;
       room.features = parseLines(parsed.data.features);
       room.photoUrls = [

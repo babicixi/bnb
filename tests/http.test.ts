@@ -111,7 +111,7 @@ describe("public site", () => {
         guestPhone: "+84111111111",
       });
     expect(res.status).toBe(302);
-    expect(res.headers.location).toMatch(/^\/book\/BNB-/);
+    expect(res.headers.location).toMatch(/^\/book\/[A-Za-z0-9]+-[A-Za-z0-9]+-\d{4}\.\d{2}\.\d{2}-\d+$/);
   });
 
   it("form-style submission (date+time pairs, no bookingType) auto-detects type and stores fb/ig", async () => {

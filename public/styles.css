@@ -31,6 +31,7 @@ header a, header .brand { color: var(--fg); text-decoration: none; font-weight: 
 header nav a { margin-left: 0.75rem; font-weight: 400; font-size: 0.95rem; }
 header nav form { display: inline; }
 main { max-width: 960px; margin: 1.5rem auto; padding: 0 1rem 4rem; }
+body.wide-page main { max-width: 1400px; }
 h1, h2, h3 { line-height: 1.2; }
 h1 { font-size: 1.6rem; margin: 0 0 1rem; }
 h2 { font-size: 1.25rem; margin: 1.5rem 0 0.5rem; }
@@ -56,6 +57,29 @@ input, select, textarea, button {
   background: #fff;
   width: 100%;
   max-width: 380px;
+}
+/* Checkboxes and radios are not text inputs — strip the box styling
+   the rule above applies to all `input`s. */
+input[type="checkbox"], input[type="radio"] {
+  width: auto;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin: 0 0.4rem 0 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+label {
+  vertical-align: middle;
+}
+/* When a checkbox shares a label with text, stop the label from going
+   block-level so the box and its caption stay on one line. */
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]) {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.75rem;
 }
 button, .btn {
   background: var(--accent);
@@ -90,6 +114,10 @@ table { border-collapse: collapse; width: 100%; background: #fff; }
 th, td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left; font-size: 0.92rem; }
 th { background: #fafafa; font-weight: 600; }
 tr:hover td { background: #fafaf2; }
+.table-wrap { overflow-x: auto; }
+.bookings-table { min-width: 1100px; }
+.bookings-table th, .bookings-table td { white-space: nowrap; }
+.bookings-table td.cell-ellipsis { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .error { color: var(--bad); font-size: 0.9rem; }
 .success { color: var(--good); font-size: 0.95rem; }
 .countdown { font-size: 1.25rem; font-weight: 600; color: var(--bad); }

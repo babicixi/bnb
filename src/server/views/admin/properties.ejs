@@ -91,7 +91,7 @@
           </div>
           <div>
             <label>&nbsp;</label>
-            <label class="muted-small"><input type="hidden" name="hourlyEnabled" value="0" /><input type="checkbox" name="hourlyEnabled" value="1" <%= r.hourlyEnabled !== false ? 'checked' : '' %> /> Available for hourly bookings</label>
+            <label class="muted-small"><input type="checkbox" name="hourlyEnabled" value="1" <%= r.hourlyEnabled !== false ? 'checked' : '' %> /> Available for hourly bookings</label>
           </div>
         </div>
         <h4 style="margin: 1rem 0 0.25rem;">Hourly tier prices (₫'000)</h4>
@@ -128,7 +128,7 @@
         <textarea name="videoUrls" rows="3" style="width:100%; max-width:none" placeholder="https://youtube.com/watch?v=ABC123&#10;https://drive.google.com/file/d/.../view"><%= (r.videoUrls || []).join('\n') %></textarea>
 
         <p>
-          <label><input type="hidden" name="isActive" value="0" /><input type="checkbox" name="isActive" value="1" <%= r.isActive ? 'checked' : '' %> /> Active (shown on public site &amp; bookable)</label>
+          <label><input type="checkbox" name="isActive" value="1" <%= r.isActive ? 'checked' : '' %> /> Active (shown on public site &amp; bookable)</label>
         </p>
         <p>
           <button type="submit">Save room</button>

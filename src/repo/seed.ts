@@ -159,25 +159,10 @@ export function seedRepository(repo: Repository): DemoCredential[] {
     repo.rooms.set(room.id, room);
   }
 
-  // Daily rates (90 days from today, base rates each)
+  // No per-day rate rows on first boot. Pricing falls back to room defaults
+  // (weekday/weekend rate, hourly tiers, per-hour). Admin adds overrides
+  // explicitly for holidays / special days via /admin/pricing.
   const today = new Date();
-  for (const room of rooms) {
-    for (let i = 0; i < 90; i += 1) {
-      const date = new Date(
-        Date.UTC(
-          today.getUTCFullYear(),
-          today.getUTCMonth(),
-          today.getUTCDate() + i,
-        ),
-      );
-      repo.rates.push({
-        roomId: room.id,
-        rateDate: date.toISOString().slice(0, 10),
-        dayRateVnd: room.baseDayRateVnd,
-        hourlyRateVnd: room.baseHourlyRateVnd,
-      });
-    }
-  }
 
   // Minibar
   const minibarItems = [

@@ -24,6 +24,9 @@
   <a class="btn" href="/admin/today">Today's operations</a>
   <a class="btn secondary" href="/admin/refunds">Pending refunds</a>
   <a class="btn secondary" href="/admin/extras">Pending extras</a>
+  <form method="post" action="/admin/bookings/_bulk/delete-cancelled" style="display:inline" onsubmit="return confirm('Permanently delete every cancelled and closed booking? Cannot be undone.')">
+    <button type="submit" class="secondary">Purge cancelled / closed</button>
+  </form>
 </p>
 
 <form method="get" action="/admin" class="card">
@@ -91,42 +94,43 @@
 <% } else if (view === 'month') { %>
   <%- include('_bookings_month', { monthGrid, formatVnd, formatDateTime }) %>
 <% } else { %>
-  <table>
-    <thead>
-      <tr>
-        <th>#</th><th>Room</th><th>Guest</th><th>Check-in</th><th>Check-out</th>
-        <th>Agent</th><th>Cleaner</th><th>Status</th><th>Payment</th>
-        <th>Minibar</th><th>Damages</th><th>Total</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      <% if (bookings.length === 0) { %>
-        <tr><td colspan="13" class="muted">No bookings match the filters yet.</td></tr>
-      <% } %>
-      <% bookings.forEach(function(b){
-           var g = guestForBooking(b);
-           var r = roomForBooking(b);
-           var agent = b.salesAgentId ? users.get(b.salesAgentId) : null;
-           var job = cleaningJobForBooking(b);
-           var cleaner = job && job.assignedToUserId ? users.get(job.assignedToUserId) : null;
-      %>
+  <div class="table-wrap">
+    <table class="bookings-table">
+      <thead>
         <tr>
-          <td><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
-          <td><%= r ? r.name : '—' %></td>
-          <td><%= g ? g.fullName : '—' %><% if (g && g.phone) { %><br><span class="muted-small"><%= g.phone %></span><% } %></td>
-          <td><%= formatDateTime(b.checkInAt) %></td>
-          <td><%= formatDateTime(b.checkOutAt) %></td>
-          <td><%= agent ? agent.fullName : '—' %></td>
-          <td><%= cleaner ? cleaner.fullName : '—' %></td>
-          <td><span class="badge"><%= b.status %></span></td>
-          <td><span class="badge"><%= b.paymentStatus %></span></td>
-          <td><%= b.minibarChargesVnd ? formatVnd(b.minibarChargesVnd) : '—' %></td>
-          <td><%= b.damageChargesVnd ? formatVnd(b.damageChargesVnd) : '—' %></td>
-          <td><%= formatVnd(b.finalRoomChargeVnd + b.securityDepositVnd) %></td>
-          <td><a href="/admin/bookings/<%= b.id %>" class="btn secondary">Open</a></td>
+          <th>#</th><th>Room</th><th>Guest</th><th>Check-in</th><th>Check-out</th>
+          <th>Agent</th><th>Cleaner</th><th>Status</th><th>Payment</th>
+          <th>Total</th><th></th>
         </tr>
-      <% }) %>
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        <% if (bookings.length === 0) { %>
+          <tr><td colspan="11" class="muted">No bookings match the filters yet.</td></tr>
+        <% } %>
+        <% bookings.forEach(function(b){
+             var g = guestForBooking(b);
+             var r = roomForBooking(b);
+             var agent = b.salesAgentId ? users.get(b.salesAgentId) : null;
+             var job = cleaningJobForBooking(b);
+             var cleaner = job && job.assignedToUserId ? users.get(job.assignedToUserId) : null;
+             var guestLabel = g ? (g.phone ? g.fullName + ' · ' + g.phone : g.fullName) : '—';
+        %>
+          <tr>
+            <td><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
+            <td class="cell-ellipsis" title="<%= r ? r.name : '' %>"><%= r ? r.name : '—' %></td>
+            <td class="cell-ellipsis" title="<%= guestLabel %>"><%= g ? g.fullName : '—' %></td>
+            <td><%= formatDateTime(b.checkInAt) %></td>
+            <td><%= formatDateTime(b.checkOutAt) %></td>
+            <td class="cell-ellipsis" title="<%= agent ? agent.fullName : '' %>"><%= agent ? agent.fullName : '—' %></td>
+            <td class="cell-ellipsis" title="<%= cleaner ? cleaner.fullName : '' %>"><%= cleaner ? cleaner.fullName : '—' %></td>
+            <td><span class="badge"><%= b.status %></span></td>
+            <td><span class="badge"><%= b.paymentStatus %></span></td>
+            <td><%= formatVnd(b.finalRoomChargeVnd + b.securityDepositVnd) %></td>
+            <td><a href="/admin/bookings/<%= b.id %>" class="btn secondary">Open</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
 <% } %>
 <%- include('../_footer') %>
