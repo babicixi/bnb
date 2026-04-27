@@ -545,6 +545,19 @@ export function mountAdminRoutes(
     next();
   });
 
+  function csvField(value: string): string {
+    if (value === undefined || value === null) return "";
+    const s = String(value);
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  }
+
+  function csvFileName(name: string): string {
+    return name.replace(/[^A-Za-z0-9_-]+/g, "_") || "report";
+  }
+
   router.get("/", (req, res) => {
     const filters = filterSchema.parse(req.query);
     let bookings = Array.from(repo.bookings.values());
@@ -1890,108 +1903,98 @@ export function mountAdminRoutes(
     return monday.toISOString().slice(0, 10);
   }
 
-  function lastNWeeks(n: number): string[] {
-    const out: string[] = [];
-    const start = new Date();
-    for (let i = 0; i < n; i++) {
-      const d = new Date(start.getTime() - i * 7 * 86_400_000);
-      out.push(isoMondayOf(d));
+  type AgentWeeklyRow = {
+    weekStartIso: string;
+    bookingCount: number;
+    netRevenueVnd: number;
+    commissionVnd: number;
+    paidAmountVnd: number;
+    payments: Array<import("../../domain/types.js").AgentCommissionPayment>;
+  };
+
+  function buildAgentWeeklyRows(
+    ledger: Array<import("../../domain/types.js").CommissionLedgerEntry>,
+    payments: Array<import("../../domain/types.js").AgentCommissionPayment>,
+  ): AgentWeeklyRow[] {
+    const buckets = new Map<string, AgentWeeklyRow>();
+    const get = (wk: string): AgentWeeklyRow => {
+      let row = buckets.get(wk);
+      if (!row) {
+        row = {
+          weekStartIso: wk,
+          bookingCount: 0,
+          netRevenueVnd: 0,
+          commissionVnd: 0,
+          paidAmountVnd: 0,
+          payments: [],
+        };
+        buckets.set(wk, row);
+      }
+      return row;
+    };
+    for (const e of ledger) {
+      if (e.status === "voided") continue;
+      const wk = isoMondayOf(e.createdAt);
+      const row = get(wk);
+      const booking = repo.bookings.get(e.bookingId);
+      if (booking) {
+        row.bookingCount += 1;
+        row.netRevenueVnd += booking.finalRoomChargeVnd;
+      }
+      row.commissionVnd += e.amountVnd;
     }
-    return out;
+    for (const p of payments) {
+      const row = get(p.weekStartIso);
+      row.paidAmountVnd += p.amountVnd;
+      row.payments.push(p);
+    }
+    const thisWeek = isoMondayOf(new Date());
+    if (!buckets.has(thisWeek)) get(thisWeek);
+    const rows = Array.from(buckets.values());
+    rows.sort((a, b) => b.weekStartIso.localeCompare(a.weekStartIso));
+    for (const r of rows) {
+      r.payments.sort((x, y) => y.paidAt.getTime() - x.paidAt.getTime());
+    }
+    return rows;
+  }
+
+  function ledgerByAgentMap() {
+    const m = new Map<
+      string,
+      Array<import("../../domain/types.js").CommissionLedgerEntry>
+    >();
+    for (const e of repo.commissionLedger.values()) {
+      const arr = m.get(e.salesAgentId) ?? [];
+      arr.push(e);
+      m.set(e.salesAgentId, arr);
+    }
+    return m;
+  }
+
+  function agentPaymentsByAgentMap() {
+    const m = new Map<
+      string,
+      Array<import("../../domain/types.js").AgentCommissionPayment>
+    >();
+    for (const p of repo.agentPayments) {
+      const arr = m.get(p.salesAgentId) ?? [];
+      arr.push(p);
+      m.set(p.salesAgentId, arr);
+    }
+    return m;
   }
 
   router.get("/agents", (_req, res) => {
     const agents = Array.from(repo.users.values()).filter(
       (u) => u.role === "sales_agent",
     );
-    const ledgerByAgent = new Map<
-      string,
-      Array<import("../../domain/types.js").CommissionLedgerEntry>
-    >();
-    for (const e of repo.commissionLedger.values()) {
-      const arr = ledgerByAgent.get(e.salesAgentId) ?? [];
-      arr.push(e);
-      ledgerByAgent.set(e.salesAgentId, arr);
-    }
-    const paymentsByAgent = new Map<
-      string,
-      Array<import("../../domain/types.js").AgentCommissionPayment>
-    >();
-    for (const p of repo.agentPayments) {
-      const arr = paymentsByAgent.get(p.salesAgentId) ?? [];
-      arr.push(p);
-      paymentsByAgent.set(p.salesAgentId, arr);
-    }
-
-    type WeeklyRow = {
-      weekStartIso: string;
-      bookingCount: number;
-      netRevenueVnd: number;
-      commissionVnd: number;
-      paidAmountVnd: number;
-      payments: Array<import("../../domain/types.js").AgentCommissionPayment>;
-    };
-
-    function buildWeeklyRows(
-      ledger: Array<import("../../domain/types.js").CommissionLedgerEntry>,
-      payments: Array<import("../../domain/types.js").AgentCommissionPayment>,
-    ): WeeklyRow[] {
-      const buckets = new Map<string, WeeklyRow>();
-      const get = (wk: string): WeeklyRow => {
-        let row = buckets.get(wk);
-        if (!row) {
-          row = {
-            weekStartIso: wk,
-            bookingCount: 0,
-            netRevenueVnd: 0,
-            commissionVnd: 0,
-            paidAmountVnd: 0,
-            payments: [],
-          };
-          buckets.set(wk, row);
-        }
-        return row;
-      };
-      for (const e of ledger) {
-        if (e.status === "voided") continue;
-        const wk = isoMondayOf(e.createdAt);
-        const row = get(wk);
-        const booking = repo.bookings.get(e.bookingId);
-        if (booking) {
-          row.bookingCount += 1;
-          row.netRevenueVnd += booking.finalRoomChargeVnd;
-        }
-        row.commissionVnd += e.amountVnd;
-      }
-      for (const p of payments) {
-        const row = get(p.weekStartIso);
-        row.paidAmountVnd += p.amountVnd;
-        row.payments.push(p);
-      }
-      const rows = Array.from(buckets.values());
-      // Always include the current week so admins can pre-record a payment.
-      const thisWeek = isoMondayOf(new Date());
-      if (!buckets.has(thisWeek)) {
-        rows.push({
-          weekStartIso: thisWeek,
-          bookingCount: 0,
-          netRevenueVnd: 0,
-          commissionVnd: 0,
-          paidAmountVnd: 0,
-          payments: [],
-        });
-      }
-      rows.sort((a, b) => b.weekStartIso.localeCompare(a.weekStartIso));
-      for (const r of rows) {
-        r.payments.sort((x, y) => y.paidAt.getTime() - x.paidAt.getTime());
-      }
-      return rows;
-    }
+    const ledgerByAgent = ledgerByAgentMap();
+    const paymentsByAgent = agentPaymentsByAgentMap();
 
     const agentRows = agents.map((a) => {
       const ledger = ledgerByAgent.get(a.id) ?? [];
       const payments = paymentsByAgent.get(a.id) ?? [];
-      const weeklyRows = buildWeeklyRows(ledger, payments);
+      const weeklyRows = buildAgentWeeklyRows(ledger, payments);
       const lifetimeBookings = weeklyRows.reduce(
         (s, r) => s + r.bookingCount,
         0,
@@ -2022,7 +2025,7 @@ export function mountAdminRoutes(
     });
 
     // All-agent aggregate: union all weeks, sum across agents.
-    const allWeeks = new Map<string, WeeklyRow>();
+    const allWeeks = new Map<string, AgentWeeklyRow>();
     for (const ar of agentRows) {
       for (const r of ar.weeklyRows) {
         let agg = allWeeks.get(r.weekStartIso);
@@ -2407,12 +2410,117 @@ export function mountAdminRoutes(
     },
   );
 
+  router.get("/agents/:id/report.csv", (req, res) => {
+    const u = repo.users.get(req.params.id as string);
+    if (!u || u.role !== "sales_agent") {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const ledger = ledgerByAgentMap().get(u.id) ?? [];
+    const payments = agentPaymentsByAgentMap().get(u.id) ?? [];
+    const weeklyRows = buildAgentWeeklyRows(ledger, payments);
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const csvLines: string[] = [];
+    csvLines.push(`Sales agent report,${csvField(u.fullName)}`);
+    csvLines.push(`Email,${csvField(u.email)}`);
+    csvLines.push(`Generated,${new Date().toISOString()}`);
+    csvLines.push(
+      "Note,Percentage commissions are net of discount codes; fixed are flat per booking.",
+    );
+    csvLines.push("");
+    csvLines.push(
+      "Week of,Bookings,Net revenue (VND),Commission earned (VND),Commission paid (VND),Outstanding (VND),Payment screenshots",
+    );
+    for (const w of weeklyRows) {
+      const outstanding = Math.max(0, w.commissionVnd - w.paidAmountVnd);
+      const screenshots = w.payments
+        .map((p) => (p.screenshotUrl ? `${baseUrl}${p.screenshotUrl}` : ""))
+        .filter(Boolean)
+        .join(" ");
+      csvLines.push(
+        [
+          w.weekStartIso,
+          String(w.bookingCount),
+          String(w.netRevenueVnd),
+          String(w.commissionVnd),
+          String(w.paidAmountVnd),
+          String(outstanding),
+          csvField(screenshots),
+        ].join(","),
+      );
+    }
+    const totalCommission = weeklyRows.reduce(
+      (s, w) => s + w.commissionVnd,
+      0,
+    );
+    const totalPaid = weeklyRows.reduce((s, w) => s + w.paidAmountVnd, 0);
+    csvLines.push("");
+    csvLines.push(
+      `Total,${weeklyRows.reduce((s, w) => s + w.bookingCount, 0)},${weeklyRows.reduce((s, w) => s + w.netRevenueVnd, 0)},${totalCommission},${totalPaid},${Math.max(0, totalCommission - totalPaid)},`,
+    );
+    res
+      .type("text/csv; charset=utf-8")
+      .setHeader(
+        "Content-Disposition",
+        `attachment; filename="${csvFileName(u.fullName)}-commissions.csv"`,
+      )
+      .send(csvLines.join("\n"));
+  });
+
   // ---------- Cleaning crew management ----------
+  type CleanerWeeklyRow = {
+    weekStartIso: string;
+    jobsCompleted: number;
+    earnedVnd: number;
+    paidAmountVnd: number;
+    payments: Array<import("../../domain/types.js").CleanerPayrollPayment>;
+  };
+
+  function buildCleanerWeeklyRows(
+    jobs: Array<import("../../domain/types.js").CleaningJob>,
+    payments: Array<import("../../domain/types.js").CleanerPayrollPayment>,
+  ): CleanerWeeklyRow[] {
+    const buckets = new Map<string, CleanerWeeklyRow>();
+    const get = (wk: string): CleanerWeeklyRow => {
+      let row = buckets.get(wk);
+      if (!row) {
+        row = {
+          weekStartIso: wk,
+          jobsCompleted: 0,
+          earnedVnd: 0,
+          paidAmountVnd: 0,
+          payments: [],
+        };
+        buckets.set(wk, row);
+      }
+      return row;
+    };
+    for (const j of jobs) {
+      if (j.status !== "completed" || !j.completedAt) continue;
+      const wk = isoMondayOf(j.completedAt);
+      const row = get(wk);
+      row.jobsCompleted += 1;
+      row.earnedVnd += j.fixedPayVnd;
+    }
+    for (const p of payments) {
+      const row = get(p.weekStartIso);
+      row.paidAmountVnd += p.amountVnd;
+      row.payments.push(p);
+    }
+    const thisWeek = isoMondayOf(new Date());
+    if (!buckets.has(thisWeek)) get(thisWeek);
+    const rows = Array.from(buckets.values());
+    rows.sort((a, b) => b.weekStartIso.localeCompare(a.weekStartIso));
+    for (const r of rows) {
+      r.payments.sort((x, y) => y.paidAt.getTime() - x.paidAt.getTime());
+    }
+    return rows;
+  }
+
   router.get("/cleaners", (_req, res) => {
     const cleaners = Array.from(repo.users.values()).filter(
       (u) => u.role === "cleaning_crew",
     );
-    const weeks = lastNWeeks(6);
     const jobsByCleaner = new Map<
       string,
       Array<import("../../domain/types.js").CleaningJob>
@@ -2436,23 +2544,14 @@ export function mountAdminRoutes(
     const cleanerRows = cleaners.map((c) => {
       const profile = repo.cleaningCrewProfiles.get(c.id);
       const jobs = jobsByCleaner.get(c.id) ?? [];
-      const completed = jobs.filter((j) => j.status === "completed");
-      const lifetimeEarned = completed.reduce((s, j) => s + j.fixedPayVnd, 0);
-      const lifetimePaid = (paymentsByCleaner.get(c.id) ?? []).reduce(
-        (s, p) => s + p.amountVnd,
+      const payments = paymentsByCleaner.get(c.id) ?? [];
+      const weeklyRows = buildCleanerWeeklyRows(jobs, payments);
+      const lifetimeJobs = weeklyRows.reduce((s, r) => s + r.jobsCompleted, 0);
+      const lifetimeEarned = weeklyRows.reduce((s, r) => s + r.earnedVnd, 0);
+      const lifetimePaid = weeklyRows.reduce(
+        (s, r) => s + r.paidAmountVnd,
         0,
       );
-      const weekly = weeks.map((wk) => {
-        const weekJobs = completed.filter(
-          (j) =>
-            j.completedAt && isoMondayOf(j.completedAt) === wk,
-        );
-        const earned = weekJobs.reduce((s, j) => s + j.fixedPayVnd, 0);
-        const paidAmount = (paymentsByCleaner.get(c.id) ?? [])
-          .filter((p) => p.weekStartIso === wk)
-          .reduce((s, p) => s + p.amountVnd, 0);
-        return { week: wk, earned, jobs: weekJobs.length, paidAmount };
-      });
       const upcomingJobs = jobs
         .filter(
           (j) =>
@@ -2465,24 +2564,46 @@ export function mountAdminRoutes(
       return {
         cleaner: c,
         profile,
+        weeklyRows,
+        lifetimeJobs,
         lifetimeEarned,
         lifetimePaid,
-        weekly,
         upcomingJobs,
-        recentPayments: (paymentsByCleaner.get(c.id) ?? [])
-          .slice()
-          .sort((x, y) => y.paidAt.getTime() - x.paidAt.getTime())
-          .slice(0, 6),
       };
     });
+
+    // Aggregate across all cleaners.
+    const allWeeks = new Map<string, CleanerWeeklyRow>();
+    for (const cr of cleanerRows) {
+      for (const r of cr.weeklyRows) {
+        let agg = allWeeks.get(r.weekStartIso);
+        if (!agg) {
+          agg = {
+            weekStartIso: r.weekStartIso,
+            jobsCompleted: 0,
+            earnedVnd: 0,
+            paidAmountVnd: 0,
+            payments: [],
+          };
+          allWeeks.set(r.weekStartIso, agg);
+        }
+        agg.jobsCompleted += r.jobsCompleted;
+        agg.earnedVnd += r.earnedVnd;
+        agg.paidAmountVnd += r.paidAmountVnd;
+        agg.payments.push(...r.payments);
+      }
+    }
+    const aggregateRows = Array.from(allWeeks.values()).sort((a, b) =>
+      b.weekStartIso.localeCompare(a.weekStartIso),
+    );
 
     const allRooms = Array.from(repo.rooms.values());
     const allBookings = Array.from(repo.bookings.values());
 
     res.render("admin/cleaners", {
       title: "Cleaning crew",
-      weeks,
       cleanerRows,
+      aggregateRows,
       allCleaners: cleaners,
       bookingForJob: (j: { bookingId: string }) =>
         allBookings.find((b) => b.id === j.bookingId),
@@ -2700,12 +2821,17 @@ export function mountAdminRoutes(
     res.redirect("/admin/cleaners");
   });
 
-  const cleanerPaymentSchema = z.object({
-    weekStartIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    jobsCount: z.coerce.number().int().nonnegative(),
-    amountVnd: z.coerce.number().int().nonnegative(),
-    notes: z.string().optional(),
-  });
+  const cleanerPaymentSchema = z
+    .object({
+      weekStartIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      jobsCount: z.coerce.number().int().nonnegative(),
+      amountVnd: z.coerce.number().int().nonnegative().optional(),
+      amountK: z.coerce.number().nonnegative().optional(),
+      notes: z.string().optional(),
+    })
+    .refine((v) => v.amountVnd !== undefined || v.amountK !== undefined, {
+      message: "amount required",
+    });
 
   router.post(
     "/cleaners/:id/payments",
@@ -2723,6 +2849,10 @@ export function mountAdminRoutes(
           .render("error", { title: "Invalid payment", message: "" });
         return;
       }
+      const amountVnd =
+        parsed.data.amountK !== undefined
+          ? Math.round(parsed.data.amountK * 1000)
+          : (parsed.data.amountVnd ?? 0);
       const screenshotUrl = req.file
         ? `/uploads/${path.basename(req.file.path)}`
         : undefined;
@@ -2731,7 +2861,7 @@ export function mountAdminRoutes(
         cleanerUserId: u.id,
         weekStartIso: parsed.data.weekStartIso,
         jobsCount: parsed.data.jobsCount,
-        amountVnd: parsed.data.amountVnd,
+        amountVnd,
         screenshotUrl,
         paidAt: new Date(),
         notes: parsed.data.notes || undefined,
@@ -2753,6 +2883,63 @@ export function mountAdminRoutes(
       res.redirect("/admin/cleaners");
     },
   );
+
+  router.get("/cleaners/:id/report.csv", (req, res) => {
+    const u = repo.users.get(req.params.id as string);
+    if (!u || u.role !== "cleaning_crew") {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const profile = repo.cleaningCrewProfiles.get(u.id);
+    const jobs: Array<import("../../domain/types.js").CleaningJob> = [];
+    for (const j of repo.cleaningJobs.values()) {
+      if (j.assignedToUserId === u.id) jobs.push(j);
+    }
+    const payments = repo.cleanerPayments.filter((p) => p.cleanerUserId === u.id);
+    const weeklyRows = buildCleanerWeeklyRows(jobs, payments);
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const csvLines: string[] = [];
+    csvLines.push(`Cleaning crew report,${csvField(u.fullName)}`);
+    csvLines.push(`Email,${csvField(u.email)}`);
+    csvLines.push(
+      `Fixed pay per job (VND),${profile ? profile.fixedPayPerJobVnd : 0}`,
+    );
+    csvLines.push(`Generated,${new Date().toISOString()}`);
+    csvLines.push("");
+    csvLines.push(
+      "Week of,Completed jobs,Earned (VND),Paid (VND),Outstanding (VND),Payment screenshots",
+    );
+    for (const w of weeklyRows) {
+      const outstanding = Math.max(0, w.earnedVnd - w.paidAmountVnd);
+      const screenshots = w.payments
+        .map((p) => (p.screenshotUrl ? `${baseUrl}${p.screenshotUrl}` : ""))
+        .filter(Boolean)
+        .join(" ");
+      csvLines.push(
+        [
+          w.weekStartIso,
+          String(w.jobsCompleted),
+          String(w.earnedVnd),
+          String(w.paidAmountVnd),
+          String(outstanding),
+          csvField(screenshots),
+        ].join(","),
+      );
+    }
+    const totalEarned = weeklyRows.reduce((s, w) => s + w.earnedVnd, 0);
+    const totalPaid = weeklyRows.reduce((s, w) => s + w.paidAmountVnd, 0);
+    csvLines.push("");
+    csvLines.push(
+      `Total,${weeklyRows.reduce((s, w) => s + w.jobsCompleted, 0)},${totalEarned},${totalPaid},${Math.max(0, totalEarned - totalPaid)},`,
+    );
+    res
+      .type("text/csv; charset=utf-8")
+      .setHeader(
+        "Content-Disposition",
+        `attachment; filename="${csvFileName(u.fullName)}-payroll.csv"`,
+      )
+      .send(csvLines.join("\n"));
+  });
 
   // ---------- Discounts ----------
   router.get("/discounts", (_req, res) => {

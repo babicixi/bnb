@@ -55,6 +55,7 @@
     <h2>
       <%= row.agent.fullName %>
       <span class="badge <%= row.agent.isActive ? 'good' : 'bad' %>"><%= row.agent.isActive ? 'active' : 'inactive' %></span>
+      <a href="/admin/agents/<%= row.agent.id %>/report.csv" class="btn secondary" style="margin-left:0.5rem; font-size:0.85rem;">Download CSV report</a>
     </h2>
     <p class="muted-small">
       <%= row.agent.email %><% if (row.agent.phone) { %> · <%= row.agent.phone %><% } %>
