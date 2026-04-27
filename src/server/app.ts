@@ -62,7 +62,7 @@ export function createApp(opts: CreateAppOptions = {}): {
   mountAuthRoutes(app, repo);
   mountPublicRoutes(app, repo);
   mountBookingRoutes(app, repo, uploadsDir);
-  mountAdminRoutes(app, repo);
+  mountAdminRoutes(app, repo, uploadsDir);
   mountAgentRoutes(app, repo);
   mountCleaningRoutes(app, repo);
 

@@ -1,6 +1,7 @@
 <%- include('../_header') %>
+<%- include('_nav') %>
 <h1>Pricing</h1>
-<p><a href="/admin">← Dashboard</a></p>
+<p class="muted-small">Rates are entered in <strong>thousands of VND</strong>. Type <code>900</code> for 900,000 ₫, <code>1500</code> for 1,500,000 ₫, etc.</p>
 <% if (flash) { %><p class="success">Saved (<%= flash %>).</p><% } %>
 
 <form method="get" action="/admin/pricing" class="card">
@@ -25,12 +26,12 @@
         <label>To date</label><input type="date" name="toDate" required />
       </div>
       <div>
-        <label>Day rate (₫)</label>
-        <input type="number" name="dayRateVnd" min="0" required />
+        <label>Day rate (₫'000)</label>
+        <input type="number" name="dayRateK" min="0" step="0.5" placeholder="e.g. 900" required />
       </div>
       <div>
-        <label>Hourly rate (₫)</label>
-        <input type="number" name="hourlyRateVnd" min="0" required />
+        <label>Hourly rate (₫'000)</label>
+        <input type="number" name="hourlyRateK" min="0" step="0.5" placeholder="e.g. 150" required />
       </div>
     </div>
     <p><label><input type="checkbox" name="weekdayOnly" value="1" /> Weekdays only</label></p>
@@ -54,23 +55,32 @@
 
 <div class="card">
   <h2>Daily rates (next 60 days)</h2>
+  <p class="muted-small">Edit values inline; the column header reminds you the unit is ₫'000.</p>
   <table>
-    <thead><tr><th>Date</th><th>Day rate</th><th>Hourly rate</th><th>Edit</th></tr></thead>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Day rate (₫'000)</th>
+        <th>Hourly rate (₫'000)</th>
+        <th>Preview</th>
+        <th></th>
+      </tr>
+    </thead>
     <tbody>
       <% rates.forEach(function(r){ %>
         <tr>
           <td><%= r.rateDate %></td>
-          <td><%= formatVnd(r.dayRateVnd) %></td>
-          <td><%= formatVnd(r.hourlyRateVnd) %></td>
           <td>
-            <form method="post" action="/admin/pricing/edit" style="display:flex; gap:0.5rem; align-items:center;">
-              <input type="hidden" name="roomId" value="<%= room.id %>" />
-              <input type="hidden" name="rateDate" value="<%= r.rateDate %>" />
-              <input type="number" name="dayRateVnd" value="<%= r.dayRateVnd %>" min="0" style="max-width:120px" />
-              <input type="number" name="hourlyRateVnd" value="<%= r.hourlyRateVnd %>" min="0" style="max-width:120px" />
-              <button type="submit" class="secondary">Save</button>
-            </form>
+            <form method="post" action="/admin/pricing/edit" id="rate-<%= r.rateDate %>" style="display:none"></form>
+            <input form="rate-<%= r.rateDate %>" type="hidden" name="roomId" value="<%= room.id %>" />
+            <input form="rate-<%= r.rateDate %>" type="hidden" name="rateDate" value="<%= r.rateDate %>" />
+            <input form="rate-<%= r.rateDate %>" type="number" name="dayRateK" value="<%= r.dayRateVnd / 1000 %>" min="0" step="0.5" style="max-width:110px" />
           </td>
+          <td>
+            <input form="rate-<%= r.rateDate %>" type="number" name="hourlyRateK" value="<%= r.hourlyRateVnd / 1000 %>" min="0" step="0.5" style="max-width:110px" />
+          </td>
+          <td class="muted-small"><%= formatVnd(r.dayRateVnd) %> · <%= formatVnd(r.hourlyRateVnd) %>/hr</td>
+          <td><button form="rate-<%= r.rateDate %>" type="submit" class="secondary">Save</button></td>
         </tr>
       <% }) %>
     </tbody>

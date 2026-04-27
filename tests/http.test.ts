@@ -586,17 +586,19 @@ describe("admin pricing edit", () => {
   it("single-rate edit updates the rate and writes audit entry", async () => {
     const admin = await loginAs("admin");
     const today = new Date().toISOString().slice(0, 10);
+    // Pricing form takes thousands of VND (e.g. 1500 → 1,500,000)
     const res = await admin.post("/admin/pricing/edit").type("form").send({
       roomId: "room-1",
       rateDate: today,
-      dayRateVnd: 9999999,
-      hourlyRateVnd: 1234,
+      dayRateK: 1500,
+      hourlyRateK: 200,
     });
     expect(res.status).toBe(302);
     const rate = ctx.repo.rates.find(
       (r) => r.roomId === "room-1" && r.rateDate === today,
     )!;
-    expect(rate.dayRateVnd).toBe(9999999);
+    expect(rate.dayRateVnd).toBe(1_500_000);
+    expect(rate.hourlyRateVnd).toBe(200_000);
     expect(
       ctx.repo.auditLog.some(
         (e) => e.action === "pricing.edit" && e.entityId === `room-1@${today}`,

@@ -1,0 +1,21 @@
+<%
+  const tabs = [
+    { href: '/admin', label: 'Bookings', match: /^\/admin\/?$|^\/admin\?/ },
+    { href: '/admin/today', label: 'Today', match: /^\/admin\/today/ },
+    { href: '/admin/properties', label: 'Properties', match: /^\/admin\/properties/ },
+    { href: '/admin/pricing', label: 'Pricing', match: /^\/admin\/pricing/ },
+    { href: '/admin/minibar', label: 'Minibar', match: /^\/admin\/minibar/ },
+    { href: '/admin/agents', label: 'Sales agents', match: /^\/admin\/agents|^\/admin\/discounts|^\/admin\/commission-rules|^\/admin\/commissions/ },
+    { href: '/admin/cleaners', label: 'Cleaning crew', match: /^\/admin\/cleaners/ },
+    { href: '/admin/reports', label: 'Reports', match: /^\/admin\/reports|^\/admin\/exports/ },
+    { href: '/admin/tasks', label: 'Tasks', match: /^\/admin\/tasks/ },
+    { href: '/admin/maintenance', label: 'Maintenance', match: /^\/admin\/maintenance/ },
+    { href: '/admin/notifications', label: 'Notifications', match: /^\/admin\/notifications|^\/admin\/audit/ },
+  ];
+  const path = (typeof currentPath !== 'undefined' && currentPath) ? currentPath : '/admin';
+%>
+<nav class="admin-tabs">
+  <% tabs.forEach(function(tab){ %>
+    <a href="<%= tab.href %>" class="admin-tab <%= tab.match.test(path) ? 'active' : '' %>"><%= tab.label %></a>
+  <% }) %>
+</nav>

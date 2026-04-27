@@ -1,10 +1,12 @@
 import type {
+  AgentCommissionPayment,
   AgentCommissionRule,
   AuditLogEntry,
   Booking,
   BookingHold,
   Building,
   CancellationRequest,
+  CleanerPayrollPayment,
   CleaningAvailability,
   CleaningCrewProfile,
   CleaningJob,
@@ -50,6 +52,8 @@ export interface Repository {
   notificationLog: NotificationLogEntry[];
   tasks: Map<Id, InternalTask>;
   maintenanceBlocks: MaintenanceBlock[];
+  agentPayments: AgentCommissionPayment[];
+  cleanerPayments: CleanerPayrollPayment[];
 
   bookingNumberCounter: { value: number };
 }
@@ -80,6 +84,8 @@ export function createRepository(): Repository {
     notificationLog: [],
     tasks: new Map(),
     maintenanceBlocks: [],
+    agentPayments: [],
+    cleanerPayments: [],
     bookingNumberCounter: { value: 0 },
   };
 }

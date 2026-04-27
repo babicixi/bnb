@@ -144,6 +144,18 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
         candidate.isActive &&
         (candidate.scope === "global" || candidate.salesAgentId === agent.id)
       ) {
+        if (candidate.usageLimit !== undefined) {
+          const used = Array.from(repo.bookings.values()).filter(
+            (b) => b.discountIdApplied === candidate.id,
+          ).length;
+          if (used >= candidate.usageLimit) {
+            res.status(400).render("error", {
+              title: "Discount limit reached",
+              message: `Discount "${candidate.name}" has hit its usage limit.`,
+            });
+            return;
+          }
+        }
         chosenDiscount = candidate;
       }
     }
@@ -204,6 +216,7 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
     });
     booking.notes = data.notes?.trim() || undefined;
     booking.source = "agent";
+    if (chosenDiscount) booking.discountIdApplied = chosenDiscount.id;
     indexBooking(repo, booking);
     repo.payments.set(payment.id, payment);
     notify("booking_hold_created", {

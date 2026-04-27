@@ -1,21 +1,22 @@
 <%- include('../_header') %>
-<h1>Admin dashboard</h1>
-<p>
+<%- include('_nav') %>
+
+<h1 style="display:flex; align-items:center; gap:1rem;">
+  Bookings
+  <span class="view-toggle">
+    <a href="/admin?<%= new URLSearchParams({ ...filters, view: 'table' }).toString() %>" class="<%= view !== 'calendar' ? 'active' : '' %>">Table</a>
+    <a href="/admin?<%= new URLSearchParams({ ...filters, view: 'calendar' }).toString() %>" class="<%= view === 'calendar' ? 'active' : '' %>">Calendar</a>
+  </span>
+</h1>
+
+<p style="margin: 0 0 1rem;">
   <a class="btn" href="/admin/today">Today's operations</a>
   <a class="btn secondary" href="/admin/refunds">Pending refunds</a>
   <a class="btn secondary" href="/admin/extras">Pending extras</a>
-  <a class="btn secondary" href="/admin/pricing">Pricing</a>
-  <a class="btn secondary" href="/admin/discounts">Discounts</a>
-  <a class="btn secondary" href="/admin/commission-rules">Commission rules</a>
-  <a class="btn secondary" href="/admin/commissions">Commissions</a>
-  <a class="btn secondary" href="/admin/minibar">Minibar</a>
-  <a class="btn secondary" href="/admin/reports">Reports</a>
-  <a class="btn secondary" href="/admin/tasks">Tasks</a>
-  <a class="btn secondary" href="/admin/maintenance">Maintenance</a>
-  <a class="btn secondary" href="/admin/notifications">Notifications</a>
-  <a class="btn secondary" href="/admin/audit">Audit log</a>
 </p>
+
 <form method="get" action="/admin" class="card">
+  <input type="hidden" name="view" value="<%= view %>" />
   <div class="grid cols-3">
     <div>
       <label>From</label>
@@ -74,27 +75,45 @@
   <p><button type="submit">Filter</button></p>
 </form>
 
-<table>
-  <thead>
-    <tr><th>#</th><th>Room</th><th>Guest</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Payment</th><th>Total</th><th></th></tr>
-  </thead>
-  <tbody>
-    <% if (bookings.length === 0) { %>
-      <tr><td colspan="9" class="muted">No bookings match the filters yet.</td></tr>
-    <% } %>
-    <% bookings.forEach(function(b){ var g = guestForBooking(b); var r = roomForBooking(b); %>
+<% if (view === 'calendar') { %>
+  <%- include('_bookings_calendar', { calendar, rooms, formatVnd, formatDateTime }) %>
+<% } else { %>
+  <table>
+    <thead>
       <tr>
-        <td><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
-        <td><%= r ? r.name : '—' %></td>
-        <td><%= g ? g.fullName : '—' %></td>
-        <td><%= formatDateTime(b.checkInAt) %></td>
-        <td><%= formatDateTime(b.checkOutAt) %></td>
-        <td><span class="badge"><%= b.status %></span></td>
-        <td><span class="badge"><%= b.paymentStatus %></span></td>
-        <td><%= formatVnd(b.finalRoomChargeVnd + b.securityDepositVnd) %></td>
-        <td><a href="/admin/bookings/<%= b.id %>" class="btn secondary">Open</a></td>
+        <th>#</th><th>Room</th><th>Guest</th><th>Check-in</th><th>Check-out</th>
+        <th>Agent</th><th>Cleaner</th><th>Status</th><th>Payment</th>
+        <th>Minibar</th><th>Damages</th><th>Total</th><th></th>
       </tr>
-    <% }) %>
-  </tbody>
-</table>
+    </thead>
+    <tbody>
+      <% if (bookings.length === 0) { %>
+        <tr><td colspan="13" class="muted">No bookings match the filters yet.</td></tr>
+      <% } %>
+      <% bookings.forEach(function(b){
+           var g = guestForBooking(b);
+           var r = roomForBooking(b);
+           var agent = b.salesAgentId ? users.get(b.salesAgentId) : null;
+           var job = cleaningJobForBooking(b);
+           var cleaner = job && job.assignedToUserId ? users.get(job.assignedToUserId) : null;
+      %>
+        <tr>
+          <td><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
+          <td><%= r ? r.name : '—' %></td>
+          <td><%= g ? g.fullName : '—' %><% if (g && g.phone) { %><br><span class="muted-small"><%= g.phone %></span><% } %></td>
+          <td><%= formatDateTime(b.checkInAt) %></td>
+          <td><%= formatDateTime(b.checkOutAt) %></td>
+          <td><%= agent ? agent.fullName : '—' %></td>
+          <td><%= cleaner ? cleaner.fullName : '—' %></td>
+          <td><span class="badge"><%= b.status %></span></td>
+          <td><span class="badge"><%= b.paymentStatus %></span></td>
+          <td><%= b.minibarChargesVnd ? formatVnd(b.minibarChargesVnd) : '—' %></td>
+          <td><%= b.damageChargesVnd ? formatVnd(b.damageChargesVnd) : '—' %></td>
+          <td><%= formatVnd(b.finalRoomChargeVnd + b.securityDepositVnd) %></td>
+          <td><a href="/admin/bookings/<%= b.id %>" class="btn secondary">Open</a></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } %>
 <%- include('../_footer') %>

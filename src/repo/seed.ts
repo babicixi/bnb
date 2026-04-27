@@ -120,6 +120,9 @@ export function seedRepository(repo: Repository): DemoCredential[] {
       baseDayRateVnd: 900_000,
       baseHourlyRateVnd: 150_000,
       isActive: true,
+      description: "Cozy studio with private balcony overlooking Nguyen Hue.",
+      features: ["Balcony", "Smart TV", "Air conditioning", "Fast Wi-Fi"],
+      photoUrls: ["https://placehold.co/600x400?text=Studio+Balcony"],
       syncStatus: "not_synced" as const,
     },
     {
@@ -131,6 +134,9 @@ export function seedRepository(repo: Repository): DemoCredential[] {
       baseDayRateVnd: 1_100_000,
       baseHourlyRateVnd: 180_000,
       isActive: true,
+      description: "Bright deluxe room with city window and small kitchenette.",
+      features: ["City window", "Kitchenette", "Bathtub", "Projector"],
+      photoUrls: ["https://placehold.co/600x400?text=Deluxe+Window"],
       syncStatus: "not_synced" as const,
     },
     {
@@ -142,6 +148,9 @@ export function seedRepository(repo: Repository): DemoCredential[] {
       baseDayRateVnd: 1_800_000,
       baseHourlyRateVnd: 250_000,
       isActive: true,
+      description: "Two-bedroom suite suitable for families.",
+      features: ["Two bedrooms", "Couch", "Smart TV", "Bathtub", "Snacks bar"],
+      photoUrls: ["https://placehold.co/600x400?text=Family+Suite"],
       syncStatus: "not_synced" as const,
     },
   ];

@@ -1,16 +1,23 @@
 <%- include('../_header') %>
+<%- include('_nav') %>
 <h1>Minibar items</h1>
-<p><a href="/admin">← Dashboard</a></p>
 <table>
-  <thead><tr><th>Name</th><th>Price</th><th>Active</th><th></th></tr></thead>
+  <thead><tr><th>Name</th><th>Price (₫)</th><th>Active</th><th>Actions</th></tr></thead>
   <tbody>
     <% if (items.length === 0) { %><tr><td colspan="4" class="muted">No items.</td></tr><% } %>
     <% items.forEach(function(i){ %>
       <tr>
-        <td><%= i.name %></td>
-        <td><%= formatVnd(i.unitPriceVnd) %></td>
+        <td>
+          <form method="post" action="/admin/minibar/<%= i.id %>/edit" id="m-<%= i.id %>" style="display:none"></form>
+          <input form="m-<%= i.id %>" type="text" name="name" value="<%= i.name %>" required style="max-width:220px" />
+        </td>
+        <td>
+          <input form="m-<%= i.id %>" type="number" name="unitPriceVnd" value="<%= i.unitPriceVnd %>" min="0" step="500" style="max-width:120px" />
+          <span class="muted-small"><%= formatVnd(i.unitPriceVnd) %></span>
+        </td>
         <td><%= i.isActive ? 'Yes' : 'No' %></td>
         <td>
+          <button form="m-<%= i.id %>" type="submit">Save</button>
           <form method="post" action="/admin/minibar/<%= i.id %>/toggle" style="display:inline">
             <button type="submit" class="secondary"><%= i.isActive ? 'Deactivate' : 'Activate' %></button>
           </form>
@@ -24,7 +31,7 @@
   <h2>Add an item</h2>
   <form method="post" action="/admin/minibar">
     <label>Name</label><input name="name" required />
-    <label>Unit price (₫)</label><input type="number" name="unitPriceVnd" min="0" required />
+    <label>Unit price (₫)</label><input type="number" name="unitPriceVnd" min="0" step="500" required />
     <p><label><input type="checkbox" name="isActive" value="1" checked /> Active</label></p>
     <p><button type="submit">Create</button></p>
   </form>

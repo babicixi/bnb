@@ -1,0 +1,131 @@
+<%- include('../_header') %>
+<%- include('_nav') %>
+<h1>Master property list</h1>
+<p class="muted-small">Buildings hold multiple rooms. Photos accept any URL (one per line). Features show on the public room page.</p>
+
+<div class="card">
+  <h2>Buildings</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Address</th><th>City</th><th>District</th></tr></thead>
+    <tbody>
+      <% if (buildings.length === 0) { %><tr><td colspan="4" class="muted">No buildings yet.</td></tr><% } %>
+      <% buildings.forEach(function(b){ %>
+        <tr>
+          <td><strong><%= b.name %></strong></td>
+          <td><%= b.address %></td>
+          <td><%= b.city %></td>
+          <td><%= b.district || '—' %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <details>
+    <summary>+ Add a building</summary>
+    <form method="post" action="/admin/properties/buildings">
+      <label>Name</label><input name="name" required />
+      <label>Address</label><input name="address" required />
+      <label>City</label><input name="city" value="Ho Chi Minh City" required />
+      <label>District</label><input name="district" />
+      <p><button type="submit">Create building</button></p>
+    </form>
+  </details>
+</div>
+
+<div class="card">
+  <h2>Rooms</h2>
+  <% if (rooms.length === 0) { %><p class="muted">No rooms yet — create one below.</p><% } %>
+  <% rooms.forEach(function(r){ var b = buildingForRoom(r); %>
+    <details style="margin-bottom: 0.75rem; border:1px solid var(--border); border-radius:6px; padding: 0.5rem 0.75rem;">
+      <summary>
+        <strong><%= r.name %></strong>
+        <span class="muted-small">·
+          <%= b ? b.name : '—' %> · Room <%= r.roomNumber || '—' %> ·
+          <%= formatVnd(r.baseDayRateVnd) %>/day ·
+          <%= r.isActive ? 'active' : 'inactive' %>
+        </span>
+      </summary>
+      <form method="post" action="/admin/properties/rooms/<%= r.id %>">
+        <div class="grid cols-2">
+          <div>
+            <label>Name</label>
+            <input name="name" value="<%= r.name %>" required />
+          </div>
+          <div>
+            <label>Building</label>
+            <select name="buildingId" required>
+              <% buildings.forEach(function(bb){ %>
+                <option value="<%= bb.id %>" <%= bb.id === r.buildingId ? 'selected' : '' %>><%= bb.name %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div>
+            <label>Room number</label>
+            <input name="roomNumber" value="<%= r.roomNumber || '' %>" />
+          </div>
+          <div>
+            <label>Max guests</label>
+            <input type="number" name="maxGuests" value="<%= r.maxGuests %>" min="1" required />
+          </div>
+          <div>
+            <label>Day rate (₫'000)</label>
+            <input type="number" name="baseDayRateK" value="<%= r.baseDayRateVnd / 1000 %>" min="0" step="0.5" required />
+          </div>
+          <div>
+            <label>Hourly rate (₫'000)</label>
+            <input type="number" name="baseHourlyRateK" value="<%= r.baseHourlyRateVnd / 1000 %>" min="0" step="0.5" required />
+          </div>
+        </div>
+        <label>Description (public)</label>
+        <textarea name="description" rows="2" style="width:100%; max-width:none"><%= r.description || '' %></textarea>
+        <label>Features (one per line)</label>
+        <textarea name="features" rows="4" style="width:100%; max-width:none" placeholder="Balcony&#10;Smart TV&#10;Bathtub"><%= (r.features || []).join('\n') %></textarea>
+        <label>Photo URLs (one per line)</label>
+        <textarea name="photoUrls" rows="3" style="width:100%; max-width:none" placeholder="https://drive.google.com/.../view"><%= (r.photoUrls || []).join('\n') %></textarea>
+        <p>
+          <label><input type="hidden" name="isActive" value="0" /><input type="checkbox" name="isActive" value="1" <%= r.isActive ? 'checked' : '' %> /> Active (shown on public site &amp; bookable)</label>
+        </p>
+        <p>
+          <button type="submit">Save room</button>
+          <a class="btn secondary" href="/rooms/<%= r.id %>" target="_blank">View public page</a>
+        </p>
+      </form>
+    </details>
+  <% }) %>
+</div>
+
+<div class="card">
+  <h2>Add a room</h2>
+  <form method="post" action="/admin/properties/rooms">
+    <div class="grid cols-2">
+      <div>
+        <label>Name</label><input name="name" required />
+      </div>
+      <div>
+        <label>Building</label>
+        <select name="buildingId" required>
+          <% buildings.forEach(function(b){ %>
+            <option value="<%= b.id %>"><%= b.name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div>
+        <label>Room number</label><input name="roomNumber" />
+      </div>
+      <div>
+        <label>Max guests</label><input type="number" name="maxGuests" value="2" min="1" required />
+      </div>
+      <div>
+        <label>Day rate (₫'000)</label><input type="number" name="baseDayRateK" min="0" step="0.5" required placeholder="900" />
+      </div>
+      <div>
+        <label>Hourly rate (₫'000)</label><input type="number" name="baseHourlyRateK" min="0" step="0.5" required placeholder="150" />
+      </div>
+    </div>
+    <label>Description</label><textarea name="description" rows="2" style="width:100%; max-width:none"></textarea>
+    <label>Features (one per line)</label><textarea name="features" rows="4" style="width:100%; max-width:none"></textarea>
+    <label>Photo URLs (one per line)</label><textarea name="photoUrls" rows="3" style="width:100%; max-width:none"></textarea>
+    <p><label><input type="checkbox" name="isActive" value="1" checked /> Active</label></p>
+    <p><button type="submit">Create room</button></p>
+  </form>
+</div>
+<%- include('../_footer') %>

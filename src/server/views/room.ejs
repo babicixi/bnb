@@ -3,6 +3,24 @@
 <p class="muted"><%= building && building.name %> · Room <%= room.roomNumber %> · up to <%= room.maxGuests %> guests</p>
 <p>Day rate: <strong><%= formatVnd(room.baseDayRateVnd) %></strong> · Hourly: <%= formatVnd(room.baseHourlyRateVnd) %></p>
 
+<% if (room.photoUrls && room.photoUrls.length) { %>
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
+    <% room.photoUrls.forEach(function(u){ %>
+      <a href="<%= u %>" target="_blank" class="image-thumb"><img src="<%= u %>" alt="<%= room.name %>" /></a>
+    <% }) %>
+  </div>
+<% } %>
+
+<% if (room.description) { %><p><%= room.description %></p><% } %>
+
+<% if (room.features && room.features.length) { %>
+  <p><strong>Features:</strong>
+    <% room.features.forEach(function(f, i){ %>
+      <span class="badge" style="margin-right:0.25rem;"><%= f %></span>
+    <% }) %>
+  </p>
+<% } %>
+
 <%
   // Generate 30-minute time slots in 24-hour format.
   const timeOptions = [];

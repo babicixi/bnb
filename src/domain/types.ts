@@ -75,6 +75,9 @@ export interface Room {
   baseDayRateVnd: number;
   baseHourlyRateVnd: number;
   isActive: boolean;
+  description?: string;
+  features?: string[];
+  photoUrls?: string[];
   externalChannel?: string;
   externalCalendarEventId?: string;
   syncStatus: SyncStatus;
@@ -119,6 +122,30 @@ export interface Booking {
   paymentProofUrl?: string;
   guestSourceTag?: string;
   paymentDeadlineAt?: Date;
+  discountIdApplied?: Id;
+}
+
+export interface AgentCommissionPayment {
+  id: Id;
+  salesAgentId: Id;
+  weekStartIso: string; // YYYY-MM-DD (Monday)
+  amountVnd: number;
+  screenshotUrl?: string;
+  paidAt: Date;
+  notes?: string;
+  createdByUserId?: Id;
+}
+
+export interface CleanerPayrollPayment {
+  id: Id;
+  cleanerUserId: Id;
+  weekStartIso: string; // YYYY-MM-DD (Monday)
+  jobsCount: number;
+  amountVnd: number;
+  screenshotUrl?: string;
+  paidAt: Date;
+  notes?: string;
+  createdByUserId?: Id;
 }
 
 export interface BookingHold {
@@ -164,6 +191,8 @@ export interface Discount {
   isActive: boolean;
   validFrom?: string;
   validUntil?: string;
+  /** Optional cap on how many bookings this discount may be applied to. */
+  usageLimit?: number;
 }
 
 export interface AgentCommissionRule {

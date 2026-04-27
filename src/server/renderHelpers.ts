@@ -28,5 +28,6 @@ export function attachLocaleAndHelpers(
   res.locals.currentUser = (
     req as Request & { currentUser?: { fullName?: string; role?: string } }
   ).currentUser;
+  res.locals.currentPath = req.path;
   next();
 }

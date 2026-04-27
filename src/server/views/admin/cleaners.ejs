@@ -1,0 +1,174 @@
+<%- include('../_header') %>
+<%- include('_nav') %>
+<h1>Cleaning crew</h1>
+
+<div class="card">
+  <h2>Weekly payroll summary (last 6 weeks)</h2>
+  <p class="muted-small">Earned = sum of fixed pay for jobs <em>completed</em> during the week. Paid = sum of payment screenshots uploaded against that week.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Cleaner</th>
+        <% weeks.forEach(function(w){ %><th><%= w %></th><% }) %>
+        <th>Lifetime earned</th>
+        <th>Lifetime paid</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% if (cleanerRows.length === 0) { %>
+        <tr><td colspan="<%= weeks.length + 3 %>" class="muted">No cleaning crew yet — add one below.</td></tr>
+      <% } %>
+      <% cleanerRows.forEach(function(row){ %>
+        <tr>
+          <td><strong><%= row.cleaner.fullName %></strong><br><span class="muted-small"><%= row.cleaner.email %></span></td>
+          <% row.weekly.forEach(function(w){
+               var unpaid = Math.max(0, w.earned - w.paidAmount);
+          %>
+            <td>
+              <%= w.jobs %> jobs · <%= formatVnd(w.earned) %>
+              <% if (unpaid > 0) { %><br><span class="badge bad"><%= formatVnd(unpaid) %> unpaid</span>
+              <% } else if (w.earned > 0) { %><br><span class="badge good">paid</span><% } %>
+            </td>
+          <% }) %>
+          <td><%= formatVnd(row.lifetimeEarned) %></td>
+          <td><%= formatVnd(row.lifetimePaid) %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<% cleanerRows.forEach(function(row){ %>
+  <div class="card">
+    <h2>
+      <%= row.cleaner.fullName %>
+      <span class="badge <%= row.cleaner.isActive ? 'good' : 'bad' %>"><%= row.cleaner.isActive ? 'active' : 'inactive' %></span>
+    </h2>
+    <p class="muted-small"><%= row.cleaner.email %><% if (row.cleaner.phone) { %> · <%= row.cleaner.phone %><% } %></p>
+
+    <div class="grid cols-2">
+      <div>
+        <h3>Pay rate</h3>
+        <p>Fixed pay per job: <strong><%= row.profile ? formatVnd(row.profile.fixedPayPerJobVnd) : '—' %></strong></p>
+        <form method="post" action="/admin/cleaners/<%= row.cleaner.id %>/pay">
+          <label>New rate (₫'000 per job)</label>
+          <input type="number" name="fixedPayPerJobK" step="0.5" min="0" value="<%= row.profile ? row.profile.fixedPayPerJobVnd / 1000 : 0 %>" required style="max-width:160px" />
+          <button type="submit" class="secondary">Save rate</button>
+        </form>
+        <p>
+          <form method="post" action="/admin/cleaners/<%= row.cleaner.id %>/toggle" style="display:inline">
+            <button type="submit" class="secondary"><%= row.cleaner.isActive ? 'Deactivate' : 'Activate' %> cleaner</button>
+          </form>
+        </p>
+      </div>
+
+      <div>
+        <h3>Recent payments</h3>
+        <% if (row.recentPayments.length === 0) { %><p class="muted-small">No payments recorded yet.</p><% } %>
+        <% if (row.recentPayments.length) { %>
+          <table>
+            <thead><tr><th>Week</th><th>Jobs</th><th>Amount</th><th>Paid at</th><th>Proof</th></tr></thead>
+            <tbody>
+              <% row.recentPayments.forEach(function(p){ %>
+                <tr>
+                  <td><%= p.weekStartIso %></td>
+                  <td><%= p.jobsCount %></td>
+                  <td><%= formatVnd(p.amountVnd) %></td>
+                  <td><%= formatDateTime(p.paidAt) %></td>
+                  <td><% if (p.screenshotUrl) { %><a href="<%= p.screenshotUrl %>" target="_blank">view</a><% } else { %>—<% } %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    </div>
+
+    <h3>Upcoming + recent jobs (next 8)</h3>
+    <% if (row.upcomingJobs.length === 0) { %><p class="muted-small">No upcoming or recent jobs.</p><% } %>
+    <% row.upcomingJobs.forEach(function(j){
+         var b = bookingForJob(j); var r = roomForJob(j);
+    %>
+      <details style="margin-bottom: 0.5rem;">
+        <summary>
+          <%= formatDateTime(j.windowStartAt) %> · <%= r ? r.name : '—' %> ·
+          <span class="badge"><%= j.status %></span>
+          <% if (b) { %> · <a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a><% } %>
+        </summary>
+        <form method="post" action="/admin/cleaning-jobs/<%= j.id %>/edit">
+          <div class="grid cols-2">
+            <div>
+              <label>Assigned cleaner</label>
+              <select name="assignedToUserId">
+                <option value="">— unassigned —</option>
+                <% allCleaners.forEach(function(c){ %>
+                  <option value="<%= c.id %>" <%= c.id === j.assignedToUserId ? 'selected' : '' %>><%= c.fullName %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div>
+              <label>Status</label>
+              <select name="status">
+                <% ['assigned','arrived','in_progress','completed','cancelled'].forEach(function(s){ %>
+                  <option value="<%= s %>" <%= s === j.status ? 'selected' : '' %>><%= s %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div>
+              <label>Window start (Vietnam time)</label>
+              <input type="datetime-local" name="windowStartAt" value="<%= j.windowStartAt.toISOString().slice(0,16) %>" />
+            </div>
+            <div>
+              <label>Window end</label>
+              <input type="datetime-local" name="windowEndAt" value="<%= j.windowEndAt.toISOString().slice(0,16) %>" />
+            </div>
+          </div>
+          <p><button type="submit" class="secondary">Save job</button></p>
+        </form>
+      </details>
+    <% }) %>
+
+    <details>
+      <summary>+ Record a weekly payroll payment</summary>
+      <form method="post" action="/admin/cleaners/<%= row.cleaner.id %>/payments" enctype="multipart/form-data">
+        <div class="grid cols-3">
+          <div>
+            <label>Week starting (Monday)</label>
+            <select name="weekStartIso" required>
+              <% weeks.forEach(function(w, i){ %>
+                <option value="<%= w %>" <%= i === 0 ? 'selected' : '' %>><%= w %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div>
+            <label>Jobs counted</label>
+            <input type="number" name="jobsCount" min="0" value="0" required />
+          </div>
+          <div>
+            <label>Amount (₫)</label>
+            <input type="number" name="amountVnd" min="0" step="1000" required />
+          </div>
+        </div>
+        <label>Notes</label><input name="notes" />
+        <label>Bank-transfer screenshot</label>
+        <input type="file" name="screenshot" accept="image/*" />
+        <p><button type="submit">Record payment</button></p>
+      </form>
+    </details>
+  </div>
+<% }) %>
+
+<div class="card">
+  <h2>Add a cleaner</h2>
+  <form method="post" action="/admin/cleaners">
+    <div class="grid cols-2">
+      <div><label>Full name</label><input name="fullName" required /></div>
+      <div><label>Email</label><input type="email" name="email" required /></div>
+      <div><label>Phone (optional)</label><input name="phone" /></div>
+      <div><label>Initial password (≥ 8 chars)</label><input type="text" name="password" required /></div>
+      <div><label>Fixed pay per job (₫'000)</label><input type="number" name="fixedPayPerJobK" step="0.5" min="0" required /></div>
+    </div>
+    <p><button type="submit">Create cleaner</button></p>
+  </form>
+</div>
+<%- include('../_footer') %>

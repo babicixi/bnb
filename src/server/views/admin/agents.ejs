@@ -1,0 +1,188 @@
+<%- include('../_header') %>
+<%- include('_nav') %>
+<h1>Sales agents</h1>
+
+<div class="card">
+  <h2>Weekly commission summary (last 6 weeks)</h2>
+  <p class="muted-small">Earned = sum of confirmed-booking commissions whose ledger entry was created during the week. Paid = sum of payment screenshots uploaded against that week.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Agent</th>
+        <% weeks.forEach(function(w){ %><th><%= w %></th><% }) %>
+        <th>Lifetime earned</th>
+        <th>Lifetime paid</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% if (agentRows.length === 0) { %>
+        <tr><td colspan="<%= weeks.length + 3 %>" class="muted">No sales agents yet — add one below.</td></tr>
+      <% } %>
+      <% agentRows.forEach(function(row){ %>
+        <tr>
+          <td><strong><%= row.agent.fullName %></strong><br><span class="muted-small"><%= row.agent.email %></span></td>
+          <% row.weekly.forEach(function(w){
+               var unpaid = Math.max(0, w.earned - w.paidAmount);
+               var color = unpaid > 0 ? 'badge bad' : (w.earned > 0 ? 'badge good' : '');
+          %>
+            <td>
+              <%= formatVnd(w.earned) %>
+              <% if (unpaid > 0) { %><br><span class="<%= color %>"><%= formatVnd(unpaid) %> unpaid</span>
+              <% } else if (w.earned > 0) { %><br><span class="badge good">paid</span><% } %>
+            </td>
+          <% }) %>
+          <td><%= formatVnd(row.lifetimeEarned) %></td>
+          <td><%= formatVnd(row.lifetimePaid) %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<% agentRows.forEach(function(row){ %>
+  <div class="card">
+    <h2>
+      <%= row.agent.fullName %>
+      <span class="badge <%= row.agent.isActive ? 'good' : 'bad' %>"><%= row.agent.isActive ? 'active' : 'inactive' %></span>
+    </h2>
+    <p class="muted-small"><%= row.agent.email %><% if (row.agent.phone) { %> · <%= row.agent.phone %><% } %></p>
+
+    <div class="grid cols-2">
+      <div>
+        <h3>Commission rule</h3>
+        <% if (row.rule) { %>
+          <p>
+            <strong><%= row.rule.commissionType === 'percentage' ? row.rule.value + '% of net' : formatVnd(row.rule.value) + ' fixed' %></strong>
+          </p>
+        <% } else { %>
+          <p class="muted">No active rule — agent will earn nothing until you set one.</p>
+        <% } %>
+        <form method="post" action="/admin/agents/<%= row.agent.id %>/rule">
+          <div class="grid cols-2">
+            <div>
+              <label>Type</label>
+              <select name="commissionType">
+                <option value="percentage" <%= row.rule && row.rule.commissionType === 'percentage' ? 'selected' : '' %>>Percentage</option>
+                <option value="fixed" <%= row.rule && row.rule.commissionType === 'fixed' ? 'selected' : '' %>>Fixed (₫)</option>
+              </select>
+            </div>
+            <div>
+              <label>Value</label>
+              <input type="number" name="commissionValue" step="0.5" min="0" value="<%= row.rule ? row.rule.value : 0 %>" required />
+            </div>
+          </div>
+          <p>
+            <button type="submit" class="secondary">Update rule</button>
+            <form method="post" action="/admin/agents/<%= row.agent.id %>/toggle" style="display:inline">
+              <button type="submit" class="secondary"><%= row.agent.isActive ? 'Deactivate' : 'Activate' %> agent</button>
+            </form>
+          </p>
+        </form>
+      </div>
+
+      <div>
+        <h3>Discount codes</h3>
+        <% if (row.discounts.length === 0) { %><p class="muted-small">None assigned.</p><% } %>
+        <% row.discounts.forEach(function(d){ var used = countDiscountUsage(d.id); %>
+          <p>
+            <strong><%= d.name %></strong> — <%= d.discountType === 'percentage' ? d.value + '%' : formatVnd(d.value) %>
+            · used <%= used %><% if (d.usageLimit) { %>/<%= d.usageLimit %><% } %>
+            <span class="badge <%= d.isActive ? 'good' : '' %>"><%= d.isActive ? 'active' : 'inactive' %></span>
+          </p>
+        <% }) %>
+        <details>
+          <summary>+ Assign a new discount code</summary>
+          <form method="post" action="/admin/agents/<%= row.agent.id %>/discounts">
+            <label>Name</label><input name="name" required placeholder="e.g. Repeat customer 100k" />
+            <div class="grid cols-2">
+              <div>
+                <label>Type</label>
+                <select name="discountType">
+                  <option value="fixed">Fixed (₫)</option>
+                  <option value="percentage">Percentage</option>
+                </select>
+              </div>
+              <div>
+                <label>Value</label><input type="number" name="value" min="0" step="500" required />
+              </div>
+              <div>
+                <label>Usage limit (blank = unlimited)</label>
+                <input type="number" name="usageLimit" min="1" />
+              </div>
+              <div>
+                <label>Valid until (optional)</label>
+                <input type="date" name="validUntil" />
+              </div>
+            </div>
+            <p><button type="submit">Create discount</button></p>
+          </form>
+        </details>
+      </div>
+    </div>
+
+    <h3>Recent payments</h3>
+    <% if (row.recentPayments.length === 0) { %><p class="muted-small">No payments recorded yet.</p><% } %>
+    <% if (row.recentPayments.length) { %>
+      <table>
+        <thead><tr><th>Week of</th><th>Amount</th><th>Paid at</th><th>Notes</th><th>Screenshot</th></tr></thead>
+        <tbody>
+          <% row.recentPayments.forEach(function(p){ %>
+            <tr>
+              <td><%= p.weekStartIso %></td>
+              <td><%= formatVnd(p.amountVnd) %></td>
+              <td><%= formatDateTime(p.paidAt) %></td>
+              <td><%= p.notes || '' %></td>
+              <td><% if (p.screenshotUrl) { %><a href="<%= p.screenshotUrl %>" target="_blank">view</a><% } else { %>—<% } %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+
+    <details>
+      <summary>+ Record a weekly commission payment</summary>
+      <form method="post" action="/admin/agents/<%= row.agent.id %>/payments" enctype="multipart/form-data">
+        <div class="grid cols-2">
+          <div>
+            <label>Week starting (Monday)</label>
+            <select name="weekStartIso" required>
+              <% weeks.forEach(function(w, i){ %>
+                <option value="<%= w %>" <%= i === 0 ? 'selected' : '' %>><%= w %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div>
+            <label>Amount (₫)</label>
+            <input type="number" name="amountVnd" min="0" step="1000" required />
+          </div>
+        </div>
+        <label>Notes</label><input name="notes" />
+        <label>Bank-transfer screenshot</label>
+        <input type="file" name="screenshot" accept="image/*" />
+        <p><button type="submit">Record payment</button></p>
+      </form>
+    </details>
+  </div>
+<% }) %>
+
+<div class="card">
+  <h2>Add a sales agent</h2>
+  <form method="post" action="/admin/agents">
+    <div class="grid cols-2">
+      <div><label>Full name</label><input name="fullName" required /></div>
+      <div><label>Email</label><input type="email" name="email" required /></div>
+      <div><label>Phone (optional)</label><input name="phone" /></div>
+      <div><label>Initial password (≥ 8 chars)</label><input type="text" name="password" required /></div>
+      <div>
+        <label>Commission type</label>
+        <select name="commissionType">
+          <option value="percentage">Percentage of net</option>
+          <option value="fixed">Fixed (₫) per booking</option>
+        </select>
+      </div>
+      <div><label>Commission value</label><input type="number" name="commissionValue" min="0" step="0.5" required /></div>
+    </div>
+    <p><button type="submit">Create agent</button></p>
+  </form>
+</div>
+<%- include('../_footer') %>
