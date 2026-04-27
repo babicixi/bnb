@@ -59,10 +59,6 @@
         <label><%= t('booking.checkin_date') %></label>
         <input type="date" id="bf-checkInDate" name="checkInDate" required />
       </div>
-      <div>
-        <label><%= t('booking.checkout_date') %></label>
-        <input type="date" id="bf-checkOutDate" name="checkOutDate" required />
-      </div>
       <% if (hourlyEnabled) { %>
         <div>
           <label><%= t('booking.checkin_time') %></label>
@@ -72,6 +68,18 @@
             <% }) %>
           </select>
         </div>
+      <% } else { %>
+        <div>
+          <label class="muted-small">Standard check-in</label>
+          <p style="margin:0.55rem 0 0;"><strong>14:00</strong></p>
+          <input type="hidden" id="bf-checkInTime" name="checkInTime" value="14:00" />
+        </div>
+      <% } %>
+      <div>
+        <label><%= t('booking.checkout_date') %></label>
+        <input type="date" id="bf-checkOutDate" name="checkOutDate" required />
+      </div>
+      <% if (hourlyEnabled) { %>
         <div>
           <label><%= t('booking.checkout_time') %></label>
           <select id="bf-checkOutTime" name="checkOutTime" required>
@@ -81,8 +89,11 @@
           </select>
         </div>
       <% } else { %>
-        <input type="hidden" id="bf-checkInTime" name="checkInTime" value="14:00" />
-        <input type="hidden" id="bf-checkOutTime" name="checkOutTime" value="11:00" />
+        <div>
+          <label class="muted-small">Standard check-out</label>
+          <p style="margin:0.55rem 0 0;"><strong>11:00</strong></p>
+          <input type="hidden" id="bf-checkOutTime" name="checkOutTime" value="11:00" />
+        </div>
       <% } %>
     </div>
 

@@ -2,15 +2,20 @@
 <%- include('_nav') %>
 <h1>Reports</h1>
 <p class="muted-small">
-  Days are computed as: hourly = hours / 24 (e.g. 6h = 0.25d) · day rate = 1d
-  (standard 14:00 → 11:00) · multi-day = nights between Vietnam-local check-in
-  and check-out dates.
+  Days: hourly = h/24 (e.g. 6h = 0.25d) · day rate = 1d (standard 14:00 → 11:00) ·
+  multi-day = nights between Vietnam-local dates.
+  Occupancy % = days / <%= periodLengthDays %> for each <%= granularity %>.
   Cancelled and held bookings are excluded.
+  Net = (room + minibar) − (discounts + commission + cleaning).
 </p>
 
 <%
   function fmt(n) {
-    if (n == null) return '0 ₫';
+    if (!n) return '0';
+    return new Intl.NumberFormat('vi-VN').format(Math.round(n));
+  }
+  function fmtV(n) {
+    if (!n) return '—';
     return new Intl.NumberFormat('vi-VN').format(Math.round(n)) + ' ₫';
   }
   function fmt1(n){ return (n || 0).toFixed(1); }
@@ -24,6 +29,17 @@
       else p.set(k, overrides[k]);
     });
     return p.toString();
+  }
+  // Cell math: discount is a real cost (already netted out of finalRoomChargeVnd
+  // which is `roomRevenueVnd` here). To present "Rev (gross)" minus discounts we
+  // add discounts back into the revenue line and then count them as a cost.
+  var periodLen = periodLengthDays;
+  function cell(m){
+    var rev = m.roomRevenueVnd + m.discountsVnd + m.minibarVnd;
+    var cost = m.discountsVnd + m.commissionVnd + m.cleaningFeesVnd;
+    var net = rev - cost;
+    var occ = (m.daysBooked / periodLen) * 100;
+    return { rev: rev, cost: cost, net: net, occ: occ };
   }
 %>
 
@@ -57,14 +73,14 @@
 
 <div class="card">
   <h2>Window total <span class="muted-small">(<%= periodLabels[0] %> → <%= periodLabels[periodLabels.length - 1] %>)</span></h2>
+  <% var gt = cell(grandTotal); %>
   <div class="grid cols-3">
     <div><strong><%= grandTotal.bookings %></strong><br/><span class="muted-small">Bookings</span></div>
     <div><strong><%= fmt1(grandTotal.daysBooked) %></strong><br/><span class="muted-small">Days booked</span></div>
-    <div><strong><%= fmt(grandTotal.roomRevenueVnd) %></strong><br/><span class="muted-small">Room revenue (net)</span></div>
-    <div><strong><%= fmt(grandTotal.minibarVnd) %></strong><br/><span class="muted-small">Minibar (ancillary)</span></div>
-    <div><strong><%= fmt(grandTotal.discountsVnd) %></strong><br/><span class="muted-small">Discounts given</span></div>
-    <div><strong><%= fmt(grandTotal.commissionVnd) %></strong><br/><span class="muted-small">Sales commission</span></div>
-    <div><strong><%= fmt(grandTotal.cleaningFeesVnd) %></strong><br/><span class="muted-small">Cleaning fees</span></div>
+    <div><strong><%= gt.occ.toFixed(1) %>%</strong><br/><span class="muted-small">Occupancy</span></div>
+    <div><strong><%= fmtV(gt.rev) %></strong><br/><span class="muted-small">Revenue (room + minibar)</span></div>
+    <div><strong><%= fmtV(gt.cost) %></strong><br/><span class="muted-small">Costs (discounts + commission + cleaning)</span></div>
+    <div><strong><%= fmtV(gt.net) %></strong><br/><span class="muted-small">Net</span></div>
   </div>
 </div>
 
@@ -92,7 +108,6 @@
   <% } else { %>
     <div style="overflow-x:auto;">
       <svg viewBox="0 0 <%= chartW %> <%= chartH %>" width="100%" style="max-width:<%= chartW %>px; height:auto;">
-        <!-- y axis -->
         <line x1="<%= padL %>" y1="<%= padT %>" x2="<%= padL %>" y2="<%= padT + plotH %>" stroke="#ccc" />
         <line x1="<%= padL %>" y1="<%= padT + plotH %>" x2="<%= padL + plotW %>" y2="<%= padT + plotH %>" stroke="#ccc" />
         <% [0, 0.25, 0.5, 0.75, 1].forEach(function(t){
@@ -111,7 +126,7 @@
         %>
           <polyline fill="none" stroke="<%= color %>" stroke-width="2" points="<%= pts %>" />
           <% rr.perPeriod.forEach(function(pp, i){ %>
-            <circle cx="<%= px(i) %>" cy="<%= py(pp.m.roomRevenueVnd) %>" r="2.5" fill="<%= color %>"><title><%= rr.room.name %> · <%= periodLabels[i] %>: <%= fmt(pp.m.roomRevenueVnd) %></title></circle>
+            <circle cx="<%= px(i) %>" cy="<%= py(pp.m.roomRevenueVnd) %>" r="2.5" fill="<%= color %>"><title><%= rr.room.name %> · <%= periodLabels[i] %>: <%= fmtV(pp.m.roomRevenueVnd) %></title></circle>
           <% }) %>
         <% }) %>
       </svg>
@@ -132,7 +147,7 @@
 %>
 
 <div class="card">
-  <h2>Room ranking — total revenue in window</h2>
+  <h2>Room ranking — total room revenue in window</h2>
   <% if (sortedRooms.length === 0 || maxTotal <= 1) { %>
     <p class="muted">No revenue in window.</p>
   <% } else { %>
@@ -146,7 +161,7 @@
             <td class="muted-small"><%= rr.buildingName %></td>
             <td><%= rr.total.bookings %></td>
             <td><%= fmt1(rr.total.daysBooked) %></td>
-            <td><%= fmt(rr.total.roomRevenueVnd) %></td>
+            <td><%= fmtV(rr.total.roomRevenueVnd) %></td>
             <td>
               <div style="background:#f1ebeb; height:14px; border-radius:3px; overflow:hidden;">
                 <div style="width:<%= pct.toFixed(1) %>%; height:100%; background:var(--accent);"></div>
@@ -159,99 +174,75 @@
   <% } %>
 </div>
 
-<div class="card">
-  <h2>By building</h2>
-  <% if (buildingGroups.length === 0) { %>
-    <p class="muted">No buildings.</p>
-  <% } else { %>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Building</th>
-            <th>Bookings</th>
-            <th>Days</th>
-            <th>Room revenue</th>
-            <th>Minibar</th>
-            <th>Discounts</th>
-            <th>Commission</th>
-            <th>Cleaning fees</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% buildingGroups.forEach(function(g){ %>
-            <tr>
-              <td><strong><%= g.label %></strong></td>
-              <td><%= g.total.bookings %></td>
-              <td><%= fmt1(g.total.daysBooked) %></td>
-              <td><%= fmt(g.total.roomRevenueVnd) %></td>
-              <td><%= fmt(g.total.minibarVnd) %></td>
-              <td><%= fmt(g.total.discountsVnd) %></td>
-              <td><%= fmt(g.total.commissionVnd) %></td>
-              <td><%= fmt(g.total.cleaningFeesVnd) %></td>
-            </tr>
-          <% }) %>
-          <tr style="border-top:2px solid var(--border); font-weight:700;">
-            <td>Grand total</td>
-            <td><%= grandTotal.bookings %></td>
-            <td><%= fmt1(grandTotal.daysBooked) %></td>
-            <td><%= fmt(grandTotal.roomRevenueVnd) %></td>
-            <td><%= fmt(grandTotal.minibarVnd) %></td>
-            <td><%= fmt(grandTotal.discountsVnd) %></td>
-            <td><%= fmt(grandTotal.commissionVnd) %></td>
-            <td><%= fmt(grandTotal.cleaningFeesVnd) %></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  <% } %>
-</div>
+<%
+  // Render one matrix cell: 2-column mini grid with operational + financial figures.
+  function renderCell(m){
+    var c = cell(m);
+    return '<div class="report-cell">' +
+      '<div>' +
+        '<div><span class="rc-k">Bk</span> <span class="rc-v">' + m.bookings + '</span></div>' +
+        '<div><span class="rc-k">Dy</span> <span class="rc-v">' + fmt1(m.daysBooked) + '</span></div>' +
+        '<div><span class="rc-k">Occ</span> <span class="rc-v">' + c.occ.toFixed(0) + '%</span></div>' +
+      '</div>' +
+      '<div>' +
+        '<div><span class="rc-k">Rev</span> <span class="rc-v">' + fmt(c.rev) + '</span></div>' +
+        '<div><span class="rc-k">Cost</span> <span class="rc-v">' + fmt(c.cost) + '</span></div>' +
+        '<div><span class="rc-k">Net</span> <span class="rc-v ' + (c.net >= 0 ? 'rc-pos' : 'rc-neg') + '">' + fmt(c.net) + '</span></div>' +
+      '</div>' +
+    '</div>';
+  }
+%>
 
-<% roomReports.forEach(function(rr){ %>
-  <div class="card">
-    <h2><%= rr.room.name %> <span class="muted-small">· <%= rr.buildingName %><% if (rr.room.roomNumber) { %> · room <%= rr.room.roomNumber %><% } %></span></h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th><%= granularity === 'month' ? 'Month' : 'Week' %></th>
-            <th>Bookings</th>
-            <th>Days</th>
-            <th>Room revenue</th>
-            <th>Minibar</th>
-            <th>Discounts</th>
-            <th>Commission</th>
-            <th>Cleaning fees</th>
+<div class="card">
+  <h2>Performance matrix</h2>
+  <p class="muted-small">Each cell: <strong>Bk</strong>=bookings, <strong>Dy</strong>=days booked, <strong>Occ</strong>=occupancy% · <strong>Rev</strong>=room+minibar (₫'000s), <strong>Cost</strong>=discounts+commission+cleaning, <strong>Net</strong>=Rev−Cost.</p>
+  <div class="table-wrap">
+    <table class="reports-matrix">
+      <thead>
+        <tr>
+          <th>Building / Room</th>
+          <% periodLabels.forEach(function(lbl){ %>
+            <th><%= lbl %></th>
+          <% }) %>
+          <th class="totals-col">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% buildingTree.forEach(function(bt){ %>
+          <tr class="building-header">
+            <td colspan="<%= periods.length + 2 %>"><strong><%= bt.building.name %></strong> <span class="muted-small">· <%= bt.building.address %></span></td>
           </tr>
-        </thead>
-        <tbody>
-          <% rr.perPeriod.forEach(function(pp, i){ %>
+          <% bt.rooms.forEach(function(rr){ %>
             <tr>
-              <td><%= periodLabels[i] %></td>
-              <td><%= pp.m.bookings %></td>
-              <td><%= fmt1(pp.m.daysBooked) %></td>
-              <td><%= fmt(pp.m.roomRevenueVnd) %></td>
-              <td><%= fmt(pp.m.minibarVnd) %></td>
-              <td><%= fmt(pp.m.discountsVnd) %></td>
-              <td><%= fmt(pp.m.commissionVnd) %></td>
-              <td><%= fmt(pp.m.cleaningFeesVnd) %></td>
+              <td class="room-name">
+                <strong><%= rr.room.name %></strong>
+                <% if (rr.room.roomNumber) { %><br><span class="muted-small">#<%= rr.room.roomNumber %></span><% } %>
+              </td>
+              <% rr.perPeriod.forEach(function(pp){ %>
+                <td><%- renderCell(pp.m) %></td>
+              <% }) %>
+              <td class="totals-col"><%- renderCell(rr.total) %></td>
             </tr>
           <% }) %>
-          <tr style="border-top:2px solid var(--border); font-weight:700;">
-            <td>Total</td>
-            <td><%= rr.total.bookings %></td>
-            <td><%= fmt1(rr.total.daysBooked) %></td>
-            <td><%= fmt(rr.total.roomRevenueVnd) %></td>
-            <td><%= fmt(rr.total.minibarVnd) %></td>
-            <td><%= fmt(rr.total.discountsVnd) %></td>
-            <td><%= fmt(rr.total.commissionVnd) %></td>
-            <td><%= fmt(rr.total.cleaningFeesVnd) %></td>
+          <tr class="building-total">
+            <td><strong>Building total</strong></td>
+            <% bt.perPeriod.forEach(function(pp){ %>
+              <td><%- renderCell(pp.m) %></td>
+            <% }) %>
+            <td class="totals-col"><%- renderCell(bt.total) %></td>
           </tr>
-        </tbody>
-      </table>
-    </div>
+        <% }) %>
+        <tr class="grand-total">
+          <td><strong>Grand total</strong></td>
+          <% grandPerPeriod.forEach(function(pp){ %>
+            <td><%- renderCell(pp.m) %></td>
+          <% }) %>
+          <td class="totals-col"><%- renderCell(grandTotal) %></td>
+        </tr>
+      </tbody>
+    </table>
   </div>
-<% }) %>
+</div>
 
 <div class="card">
   <h2>Exports</h2>

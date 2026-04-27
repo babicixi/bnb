@@ -3143,6 +3143,134 @@ export function mountAdminRoutes(
       .send(csvLines.join("\n"));
   });
 
+  // ---------- Guests (CRM) ----------
+  router.get("/guests", (req, res) => {
+    const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
+    const guests = Array.from(repo.guests.values()).filter((g) => {
+      if (!q) return true;
+      const haystack = [
+        g.fullName,
+        g.email,
+        g.phone,
+        g.facebookHandle,
+        g.instagramHandle,
+        g.notes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+    const minibarUsageByBooking = new Map<
+      string,
+      Array<import("../../domain/types.js").MinibarUsage>
+    >();
+    for (const u of repo.minibarUsage) {
+      const arr = minibarUsageByBooking.get(u.bookingId) ?? [];
+      arr.push(u);
+      minibarUsageByBooking.set(u.bookingId, arr);
+    }
+    const rows = guests
+      .map((g) => {
+        const bookings = Array.from(repo.bookings.values())
+          .filter((b) => b.guestId === g.id)
+          .sort((a, b) => b.checkInAt.getTime() - a.checkInAt.getTime());
+        const totalSpentVnd = bookings.reduce(
+          (s, b) => s + b.finalRoomChargeVnd + b.minibarChargesVnd + b.damageChargesVnd,
+          0,
+        );
+        const lastStay = bookings[0]?.checkOutAt;
+        return {
+          guest: g,
+          bookings,
+          totalSpentVnd,
+          lastStay,
+          minibarByBooking: minibarUsageByBooking,
+        };
+      })
+      .sort((a, b) => {
+        const at = a.lastStay ? a.lastStay.getTime() : 0;
+        const bt = b.lastStay ? b.lastStay.getTime() : 0;
+        return bt - at;
+      });
+    res.render("admin/guests", {
+      title: "Guests",
+      rows,
+      query: q,
+      roomById: (id?: string) => (id ? repo.rooms.get(id) : undefined),
+      minibarItemById: (id?: string) =>
+        id ? repo.minibarItems.get(id) : undefined,
+    });
+  });
+
+  router.get("/guests/export.csv", (_req, res) => {
+    const minibarUsageByBooking = new Map<
+      string,
+      Array<import("../../domain/types.js").MinibarUsage>
+    >();
+    for (const u of repo.minibarUsage) {
+      const arr = minibarUsageByBooking.get(u.bookingId) ?? [];
+      arr.push(u);
+      minibarUsageByBooking.set(u.bookingId, arr);
+    }
+    const lines: string[] = [];
+    lines.push(
+      "Guest name,Phone,Email,Facebook,Instagram,Bookings,Total spent (VND),First stay,Last stay,Favourite minibar items,Notes",
+    );
+    const allGuests = Array.from(repo.guests.values());
+    for (const g of allGuests) {
+      const bookings = Array.from(repo.bookings.values())
+        .filter((b) => b.guestId === g.id)
+        .sort((a, b) => a.checkInAt.getTime() - b.checkInAt.getTime());
+      const total = bookings.reduce(
+        (s, b) => s + b.finalRoomChargeVnd + b.minibarChargesVnd + b.damageChargesVnd,
+        0,
+      );
+      const first = bookings[0]?.checkInAt;
+      const last = bookings[bookings.length - 1]?.checkOutAt;
+      // tally minibar usage across all guest bookings
+      const itemTotals = new Map<string, number>();
+      for (const b of bookings) {
+        const usages = minibarUsageByBooking.get(b.id) ?? [];
+        for (const u of usages) {
+          itemTotals.set(
+            u.minibarItemId,
+            (itemTotals.get(u.minibarItemId) ?? 0) + u.quantity,
+          );
+        }
+      }
+      const fav = Array.from(itemTotals.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([id, qty]) => {
+          const item = repo.minibarItems.get(id);
+          return `${item ? item.name : id} (x${qty})`;
+        })
+        .join("; ");
+      lines.push(
+        [
+          csvField(g.fullName),
+          csvField(g.phone),
+          csvField(g.email ?? ""),
+          csvField(g.facebookHandle ?? ""),
+          csvField(g.instagramHandle ?? ""),
+          String(bookings.length),
+          String(total),
+          first ? first.toISOString().slice(0, 10) : "",
+          last ? last.toISOString().slice(0, 10) : "",
+          csvField(fav),
+          csvField(g.notes ?? ""),
+        ].join(","),
+      );
+    }
+    res
+      .type("text/csv; charset=utf-8")
+      .setHeader(
+        "Content-Disposition",
+        `attachment; filename="guests-${Date.now()}.csv"`,
+      )
+      .send(lines.join("\n"));
+  });
+
   // ---------- Discounts ----------
   router.get("/discounts", (_req, res) => {
     res.render("admin/discounts", {
@@ -3618,13 +3746,29 @@ export function mountAdminRoutes(
       };
     });
 
+    // Build building → rooms tree for the matrix view.
+    const buildingTree = buildings.map((bld) => {
+      const rooms = roomPerPeriod.filter((rr) => rr.room.buildingId === bld.id);
+      const buildingGroup = buildingGroups.find((g) => g.key === bld.id);
+      return {
+        building: bld,
+        rooms,
+        perPeriod: buildingGroup
+          ? periods.map((p) => ({ period: p, m: buildingGroup.perPeriod.get(p)! }))
+          : [],
+        total: buildingGroup ? buildingGroup.total : emptyMetrics(),
+      };
+    });
+
     res.render("admin/reports", {
       title: "Reports",
       granularity,
+      periodLengthDays: granularity === "month" ? 30 : 7,
       filters: { from: fromQ, to: toQ, isDefault },
       periods,
       periodLabels: periods.map((p) => periodLabel(p, granularity)),
       buildingGroups,
+      buildingTree,
       grandPerPeriod: periods.map((p) => ({
         period: p,
         m: grandPerPeriod.get(p)!,
@@ -3762,6 +3906,204 @@ export function mountAdminRoutes(
       after: { status: task.status },
     });
     res.redirect("/admin/tasks");
+  });
+
+  // ---------- Users & permissions (admins, managers) ----------
+  router.get("/users", (req: RequestWithUser, res) => {
+    const all = Array.from(repo.users.values());
+    const admins = all.filter((u) => u.role === "admin");
+    const managers = all.filter((u) => u.role === "manager");
+    const others = all.filter(
+      (u) => u.role !== "admin" && u.role !== "manager",
+    );
+    res.render("admin/users", {
+      title: "User permissions",
+      admins,
+      managers,
+      others,
+      currentUserId: req.currentUser?.id,
+      flash: req.query.flash || null,
+    });
+  });
+
+  const newUserSchema = z.object({
+    fullName: z.string().min(1),
+    email: z.string().email(),
+    phone: z.string().optional(),
+    password: z.string().min(8),
+    role: z.enum(["admin", "manager"]),
+  });
+
+  router.post("/users", (req, res) => {
+    const parsed = newUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).render("error", { title: "Invalid user", message: "" });
+      return;
+    }
+    const id = nextId(parsed.data.role);
+    const user = {
+      id,
+      role: parsed.data.role,
+      fullName: parsed.data.fullName,
+      email: parsed.data.email,
+      phone: parsed.data.phone || undefined,
+      isActive: true,
+      passwordHash: bcrypt.hashSync(parsed.data.password, 8),
+    };
+    repo.users.set(id, user);
+    audit(repo, req, {
+      action: "user.create",
+      entityType: "user",
+      entityId: id,
+      after: {
+        role: user.role,
+        fullName: user.fullName,
+        email: user.email,
+      },
+    });
+    res.redirect("/admin/users?flash=created");
+  });
+
+  router.post("/users/:id/edit", (req, res) => {
+    const u = repo.users.get(req.params.id as string);
+    if (!u || (u.role !== "admin" && u.role !== "manager")) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const parsed = userEditSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).render("error", { title: "Invalid edit", message: "" });
+      return;
+    }
+    try {
+      const diff = applyUserEdit(u, parsed.data);
+      audit(repo, req, {
+        action: "user.edit",
+        entityType: "user",
+        entityId: u.id,
+        before: diff.before,
+        after: diff.after,
+      });
+    } catch (err) {
+      res.status(400).render("error", {
+        title: "Cannot save",
+        message: (err as Error).message,
+      });
+      return;
+    }
+    res.redirect("/admin/users?flash=saved");
+  });
+
+  router.post(
+    "/users/:id/role",
+    (req: RequestWithUser, res) => {
+      const u = repo.users.get(req.params.id as string);
+      if (!u || (u.role !== "admin" && u.role !== "manager")) {
+        res.status(404).render("error", { title: "Not found", message: "" });
+        return;
+      }
+      const next = String(req.body.role ?? "");
+      if (next !== "admin" && next !== "manager") {
+        res.status(400).render("error", { title: "Invalid role", message: "" });
+        return;
+      }
+      // Prevent the last active admin from being demoted.
+      if (
+        u.role === "admin" &&
+        next === "manager" &&
+        Array.from(repo.users.values()).filter(
+          (x) => x.role === "admin" && x.isActive,
+        ).length <= 1
+      ) {
+        res.status(400).render("error", {
+          title: "Cannot change role",
+          message:
+            "At least one active admin must remain. Promote another user to admin first.",
+        });
+        return;
+      }
+      const before = u.role;
+      u.role = next;
+      audit(repo, req, {
+        action: "user.role_change",
+        entityType: "user",
+        entityId: u.id,
+        before: { role: before },
+        after: { role: u.role },
+      });
+      res.redirect("/admin/users?flash=role-updated");
+    },
+  );
+
+  router.post("/users/:id/toggle", (req: RequestWithUser, res) => {
+    const u = repo.users.get(req.params.id as string);
+    if (!u || (u.role !== "admin" && u.role !== "manager")) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    if (u.id === req.currentUser?.id && u.isActive) {
+      res.status(400).render("error", {
+        title: "Cannot deactivate yourself",
+        message: "Ask another admin to do this.",
+      });
+      return;
+    }
+    if (
+      u.role === "admin" &&
+      u.isActive &&
+      Array.from(repo.users.values()).filter(
+        (x) => x.role === "admin" && x.isActive,
+      ).length <= 1
+    ) {
+      res.status(400).render("error", {
+        title: "Cannot deactivate last admin",
+        message: "Promote another user to admin before deactivating this one.",
+      });
+      return;
+    }
+    u.isActive = !u.isActive;
+    audit(repo, req, {
+      action: "user.toggle",
+      entityType: "user",
+      entityId: u.id,
+      after: { isActive: u.isActive },
+    });
+    res.redirect("/admin/users?flash=toggled");
+  });
+
+  router.post("/users/:id/delete", (req: RequestWithUser, res) => {
+    const u = repo.users.get(req.params.id as string);
+    if (!u || (u.role !== "admin" && u.role !== "manager")) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    if (u.id === req.currentUser?.id) {
+      res.status(400).render("error", {
+        title: "Cannot delete yourself",
+        message: "Ask another admin to do this.",
+      });
+      return;
+    }
+    if (
+      u.role === "admin" &&
+      Array.from(repo.users.values()).filter(
+        (x) => x.role === "admin" && x.isActive,
+      ).length <= 1
+    ) {
+      res.status(400).render("error", {
+        title: "Cannot delete last admin",
+        message: "Promote another user to admin before deleting this one.",
+      });
+      return;
+    }
+    repo.users.delete(u.id);
+    audit(repo, req, {
+      action: "user.delete",
+      entityType: "user",
+      entityId: u.id,
+      before: { fullName: u.fullName, email: u.email, role: u.role },
+    });
+    res.redirect("/admin/users?flash=deleted");
   });
 
   // ---------- Policies (cancellation fees, etc.) ----------

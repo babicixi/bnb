@@ -1,0 +1,131 @@
+<%- include('../_header') %>
+<%- include('_nav') %>
+<h1>User permissions</h1>
+<p class="muted-small">
+  Admins and managers both have full access to the booking calendar, properties,
+  and operational tabs (assigning cleaners, approving payments, refunds).
+  Sales agents and cleaners are managed on their own tabs.
+</p>
+
+<% if (flash) { %><p class="success">Saved (<%= flash %>).</p><% } %>
+
+<%
+  function renderUserList(list, title, intro) {
+%>
+  <div class="card">
+    <h2><%= title %> <span class="muted-small">(<%= list.length %>)</span></h2>
+    <% if (intro) { %><p class="muted-small"><%= intro %></p><% } %>
+    <% if (list.length === 0) { %>
+      <p class="muted">None.</p>
+    <% } else { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% list.forEach(function(u){
+               var isSelf = u.id === currentUserId;
+          %>
+            <tr>
+              <td>
+                <strong><%= u.fullName %></strong>
+                <% if (isSelf) { %> <span class="badge">you</span><% } %>
+              </td>
+              <td class="muted-small"><%= u.email %></td>
+              <td class="muted-small"><%= u.phone || '—' %></td>
+              <td><span class="badge <%= u.isActive ? 'good' : 'bad' %>"><%= u.isActive ? 'active' : 'inactive' %></span></td>
+              <td>
+                <details>
+                  <summary class="muted-small">Edit / change role</summary>
+                  <form method="post" action="/admin/users/<%= u.id %>/edit" style="margin-top:0.5rem;">
+                    <div class="grid cols-2">
+                      <div><label>Full name</label><input name="fullName" value="<%= u.fullName %>" required /></div>
+                      <div><label>Email</label><input type="email" name="email" value="<%= u.email %>" required /></div>
+                      <div><label>Phone</label><input name="phone" value="<%= u.phone || '' %>" /></div>
+                      <div><label>New password (blank = keep current)</label><input type="text" name="password" autocomplete="new-password" /></div>
+                    </div>
+                    <p><button type="submit" class="secondary">Save profile</button></p>
+                  </form>
+                  <form method="post" action="/admin/users/<%= u.id %>/role" style="margin-top:0.4rem; display:flex; gap:0.4rem; align-items:center;">
+                    <label class="muted-small" style="margin:0;">Role</label>
+                    <select name="role">
+                      <option value="manager" <%= u.role === 'manager' ? 'selected' : '' %>>Manager</option>
+                      <option value="admin" <%= u.role === 'admin' ? 'selected' : '' %>>Admin</option>
+                    </select>
+                    <button type="submit" class="secondary">Update role</button>
+                  </form>
+                  <p style="margin-top:0.4rem; display:flex; gap:0.4rem;">
+                    <% if (!isSelf) { %>
+                      <form method="post" action="/admin/users/<%= u.id %>/toggle" style="display:inline">
+                        <button type="submit" class="secondary"><%= u.isActive ? 'Deactivate' : 'Reactivate' %></button>
+                      </form>
+                      <form method="post" action="/admin/users/<%= u.id %>/delete" style="display:inline" onsubmit="return confirm('Permanently delete <%= u.fullName %>? Cannot be undone.')">
+                        <button type="submit" class="danger">Permanently delete</button>
+                      </form>
+                    <% } else { %>
+                      <span class="muted-small">You can't deactivate or delete yourself; ask another admin.</span>
+                    <% } %>
+                  </p>
+                </details>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+<% } %>
+
+<%- renderUserList(admins, 'Admins', 'Full system access. Can also manage other admins and managers.') %>
+<%- renderUserList(managers, 'Managers', 'Same operational access as admins (oversee bookings, assign cleaners, approve payments).') %>
+
+<div class="card">
+  <h2>Add a user</h2>
+  <form method="post" action="/admin/users">
+    <div class="grid cols-2">
+      <div><label>Full name</label><input name="fullName" required /></div>
+      <div><label>Email</label><input type="email" name="email" required /></div>
+      <div><label>Phone (optional)</label><input name="phone" /></div>
+      <div><label>Initial password (≥ 8 chars)</label><input type="text" name="password" required /></div>
+      <div>
+        <label>Role</label>
+        <select name="role">
+          <option value="manager" selected>Manager — oversee bookings, assign cleaners</option>
+          <option value="admin">Admin — full system access</option>
+        </select>
+      </div>
+    </div>
+    <p><button type="submit">Create user</button></p>
+  </form>
+</div>
+
+<% if (others.length > 0) { %>
+  <div class="card">
+    <h2>Other roles <span class="muted-small">(<%= others.length %>)</span></h2>
+    <p class="muted-small">Sales agents and cleaning crew are managed on their own tabs.</p>
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <% others.forEach(function(u){ %>
+          <tr>
+            <td><%= u.fullName %></td>
+            <td class="muted-small"><%= u.email %></td>
+            <td><span class="badge"><%= u.role %></span></td>
+            <td><span class="badge <%= u.isActive ? 'good' : 'bad' %>"><%= u.isActive ? 'active' : 'inactive' %></span></td>
+            <td>
+              <% if (u.role === 'sales_agent') { %><a href="/admin/agents" class="muted-small">Manage on Sales agents tab →</a><% } %>
+              <% if (u.role === 'cleaning_crew') { %><a href="/admin/cleaners" class="muted-small">Manage on Cleaning crew tab →</a><% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+<% } %>
+<%- include('../_footer') %>

@@ -1,0 +1,87 @@
+<%- include('../_header') %>
+<%- include('_nav') %>
+<h1>Guests <span class="muted-small">· CRM</span></h1>
+<p class="muted-small">
+  Every guest who has ever held, booked, or stayed appears here, sorted by most-recent stay.
+  Use the export to seed marketing outreach (e.g. follow up with anyone who tried a particular
+  minibar item).
+</p>
+
+<form method="get" action="/admin/guests" class="card" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+  <div style="flex:1 1 320px;">
+    <label>Search</label>
+    <input type="text" name="q" value="<%= query %>" placeholder="name, email, phone, fb, ig, notes" />
+  </div>
+  <div style="flex:0 0 auto;">
+    <button type="submit">Search</button>
+    <% if (query) { %><a href="/admin/guests" class="btn secondary" style="margin-left:0.4rem;">Clear</a><% } %>
+  </div>
+  <div style="flex:0 0 auto;">
+    <a href="/admin/guests/export.csv" class="btn">Download CRM CSV</a>
+  </div>
+</form>
+
+<div class="card">
+  <h2><%= rows.length %> guest<%= rows.length === 1 ? '' : 's' %><% if (query) { %> matching "<%= query %>"<% } %></h2>
+  <% if (rows.length === 0) { %>
+    <p class="muted">No guests match.</p>
+  <% } else { %>
+    <% rows.forEach(function(r){
+         var lastStay = r.lastStay ? r.lastStay.toISOString().slice(0,10) : '—';
+    %>
+      <details style="margin-bottom:0.6rem; padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:5px; background:#fff;">
+        <summary style="display:flex; flex-wrap:wrap; gap:0.4rem 1rem; align-items:center;">
+          <strong style="font-size:1.05rem;"><%= r.guest.fullName %></strong>
+          <span class="muted-small">📞 <%= r.guest.phone %></span>
+          <% if (r.guest.email) { %><span class="muted-small">✉️ <%= r.guest.email %></span><% } %>
+          <% if (r.guest.facebookHandle) { %><span class="muted-small">fb: <%= r.guest.facebookHandle %></span><% } %>
+          <% if (r.guest.instagramHandle) { %><span class="muted-small">ig: <%= r.guest.instagramHandle %></span><% } %>
+          <span style="margin-left:auto;" class="muted-small">last stay: <%= lastStay %> · <%= r.bookings.length %> booking<%= r.bookings.length === 1 ? '' : 's' %> · spent <strong><%= formatVnd(r.totalSpentVnd) %></strong></span>
+        </summary>
+
+        <% if (r.guest.notes) { %><p class="muted-small">Notes: <%= r.guest.notes %></p><% } %>
+
+        <% if (r.bookings.length === 0) { %>
+          <p class="muted-small">No bookings yet.</p>
+        <% } else { %>
+          <table style="margin-top:0.5rem;">
+            <thead>
+              <tr>
+                <th>Booking</th>
+                <th>Room</th>
+                <th>Check-in</th>
+                <th>Check-out</th>
+                <th>Status</th>
+                <th>Room charge</th>
+                <th>Minibar</th>
+                <th>Items used</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% r.bookings.forEach(function(b){
+                   var room = roomById(b.roomId);
+                   var usages = (r.minibarByBooking.get(b.id) || []);
+                   var itemSummary = usages.map(function(u){
+                     var item = minibarItemById(u.minibarItemId);
+                     return (item ? item.name : u.minibarItemId) + ' x' + u.quantity;
+                   }).join(', ');
+              %>
+                <tr>
+                  <td><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
+                  <td><%= room ? room.name : '—' %></td>
+                  <td><%= formatDateTime(b.checkInAt) %></td>
+                  <td><%= formatDateTime(b.checkOutAt) %></td>
+                  <td><span class="badge"><%= b.status %></span></td>
+                  <td><%= formatVnd(b.finalRoomChargeVnd) %></td>
+                  <td><%= b.minibarChargesVnd ? formatVnd(b.minibarChargesVnd) : '—' %></td>
+                  <td class="muted-small"><%= itemSummary || '—' %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </details>
+    <% }) %>
+  <% } %>
+</div>
+<%- include('../_footer') %>

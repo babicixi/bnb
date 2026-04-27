@@ -1,18 +1,90 @@
+<% var bodyClass = 'landing'; %>
 <%- include('_header') %>
-<h1><%= t('site.tagline') %></h1>
-<% buildings.forEach(function(b) { %>
-  <section>
-    <h2><%= b.name %> <span class="muted-small"><%= b.address %>, <%= b.city %></span></h2>
-    <div class="grid cols-2">
-      <% b.rooms.forEach(function(r) { %>
-        <div class="card">
-          <h3><%= r.name %></h3>
-          <p class="muted">Room <%= r.roomNumber || '—' %> · up to <%= r.maxGuests %> guests</p>
-          <p>From <strong><%= formatVnd(r.baseDayRateVnd) %></strong> / day · <%= formatVnd(r.baseHourlyRateVnd) %> / hour</p>
-          <p><a class="btn" href="/rooms/<%= r.id %>"><%= t('rooms.book_now') %></a></p>
-        </div>
+
+<section class="hero">
+  <div class="hero-inner">
+    <h1><%= t('site.tagline') %></h1>
+    <p class="subtitle">Boutique apartments in the heart of Saigon — book by the hour, the day, or the week. Instant confirmation, transparent pricing, no hidden fees.</p>
+    <div class="hero-cta">
+      <a href="#rooms" class="btn">Browse rooms</a>
+      <a href="/lookup" class="btn secondary">Find my booking</a>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>Why stay with us</h2>
+  <p class="lede">Designed for travellers who care about details.</p>
+  <div class="trust-strip">
+    <div class="trust-item">
+      <span class="icon">⚡</span>
+      <h3>Instant booking</h3>
+      <p>Pick your room, upload a payment screenshot, and get confirmation in minutes.</p>
+    </div>
+    <div class="trust-item">
+      <span class="icon">⏱️</span>
+      <h3>Hourly or nightly</h3>
+      <p>Need a room for a 6-hour break or a week-long stay? We charge fairly for both.</p>
+    </div>
+    <div class="trust-item">
+      <span class="icon">🧹</span>
+      <h3>Always spotless</h3>
+      <p>Every stay starts with a fresh clean from our trusted local crew.</p>
+    </div>
+    <div class="trust-item">
+      <span class="icon">📍</span>
+      <h3>Central locations</h3>
+      <p>Walking distance from Nguyen Hue, Bui Vien, and the city's best food.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="rooms">
+  <h2>Our rooms</h2>
+  <p class="lede">Hand-picked spaces across our buildings — from cozy studios to family suites.</p>
+  <% buildings.forEach(function(b) { %>
+    <% if (b.rooms.length === 0) return; %>
+    <h3 style="margin: 1.5rem 0 1rem; font-size: 1.15rem;">
+      <%= b.name %> <span class="muted-small" style="font-weight: 400;">· <%= b.address %><% if (b.district) { %>, <%= b.district %><% } %>, <%= b.city %></span>
+    </h3>
+    <div class="room-grid">
+      <% b.rooms.forEach(function(r) {
+           var heroPhoto = r.photoUrls && r.photoUrls.length ? r.photoUrls[0] : null;
+           var displayFeatures = (r.features || []).slice(0, 4);
+           var fromHourly = r.hourlyEnabled === false ? null : r.baseHourlyRateVnd;
+      %>
+        <article class="room-card">
+          <a class="media-link" href="/rooms/<%= r.id %>">
+            <div class="media" style="<%= heroPhoto ? 'background-image: url(' + JSON.stringify(heroPhoto) + ');' : 'background: linear-gradient(135deg, #b03030 0%, #1a1a1a 100%);' %>">
+              <span class="price-pill">from <%= formatVnd(r.baseDayRateVnd) %>/night</span>
+            </div>
+          </a>
+          <div class="body">
+            <h3><%= r.name %></h3>
+            <p class="building-line">Up to <%= r.maxGuests %> guest<%= r.maxGuests === 1 ? '' : 's' %><% if (r.roomNumber) { %> · room <%= r.roomNumber %><% } %></p>
+            <% if (displayFeatures.length) { %>
+              <div class="feature-tags">
+                <% displayFeatures.forEach(function(f){ %>
+                  <span class="tag"><%= f %></span>
+                <% }) %>
+                <% if ((r.features || []).length > displayFeatures.length) { %>
+                  <span class="tag">+<%= r.features.length - displayFeatures.length %> more</span>
+                <% } %>
+              </div>
+            <% } %>
+            <% if (fromHourly) { %>
+              <p class="muted-small" style="margin: 0 0 0.6rem;">or <%= formatVnd(fromHourly) %>/hour</p>
+            <% } %>
+            <a class="room-cta" href="/rooms/<%= r.id %>"><%= t('rooms.book_now') %></a>
+          </div>
+        </article>
       <% }) %>
     </div>
-  </section>
-<% }) %>
+  <% }) %>
+</section>
+
+<footer class="landing-footer">
+  <p style="margin:0;">© <%= new Date().getFullYear() %> <%= t('site.title') %> · Already booked? <a href="/lookup" style="color:#fff;">Find your reservation</a></p>
+</footer>
+
 <%- include('_footer') %>
