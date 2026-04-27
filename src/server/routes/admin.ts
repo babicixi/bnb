@@ -918,8 +918,12 @@ export function mountAdminRoutes(
   });
 
   router.get("/refunds", (_req, res) => {
+    // Refunds remain pending even after cancellation if money is still owed.
+    // Hide closed bookings (admin marked the refund as settled).
     const bookings = Array.from(repo.bookings.values()).filter(
-      (b) => b.status === "refund_pending" || b.refundDueVnd > 0,
+      (b) =>
+        b.status !== "closed" &&
+        (b.status === "refund_pending" || b.refundDueVnd > 0),
     );
     res.render("admin/list-finance", {
       title: "Pending refunds",
@@ -948,8 +952,12 @@ export function mountAdminRoutes(
   });
 
   router.get("/extras", (_req, res) => {
+    // Extras only apply to live bookings — cancelled/closed don't owe more.
     const bookings = Array.from(repo.bookings.values()).filter(
-      (b) => b.status === "extra_payment_required" || b.amountDueVnd > 0,
+      (b) =>
+        b.status !== "cancelled" &&
+        b.status !== "closed" &&
+        (b.status === "extra_payment_required" || b.amountDueVnd > 0),
     );
     res.render("admin/list-finance", {
       title: "Pending extra payments",

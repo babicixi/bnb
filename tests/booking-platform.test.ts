@@ -658,6 +658,32 @@ describe("cancellation and refunds", () => {
     expect(refund.refundDueVnd).toBe(360_000);
   });
 
+  it("approving cancellation zeros amountDue and recomputes refundDue", () => {
+    const target = booking({
+      amountPaidVnd: 1_500_000,
+      finalRoomChargeVnd: 1_000_000,
+      amountDueVnd: 200_000, // stale value from a prior edit
+      minibarChargesVnd: 50_000,
+      damageChargesVnd: 0,
+    });
+    const request = requestCancellation({
+      id: "cancel-amt",
+      booking: target,
+      requestedBy: agentOne,
+    });
+    approveCancellation({
+      booking: target,
+      request,
+      approvedBy: admin,
+      now: d("2026-04-29T15:00:00+07:00"), // 2 days before check-in → 30%
+    });
+    expect(target.status).toBe("cancelled");
+    expect(target.amountDueVnd).toBe(0);
+    // refund = 1_500_000 - 1_000_000 - 300_000 - 50_000 = 150_000
+    expect(target.refundDueVnd).toBe(150_000);
+    expect(request.cancellationFeeVnd).toBe(300_000);
+  });
+
   it("admin can approve cancellation and set fee", () => {
     const target = booking();
     const request = requestCancellation({

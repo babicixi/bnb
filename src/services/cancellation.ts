@@ -105,6 +105,18 @@ export function approveCancellation(input: {
   input.request.cancellationFeeVnd = fee;
   input.booking.status = "cancelled";
   input.booking.cancelledAt = input.now;
+  // A cancelled booking owes no further extras; any computed refund replaces
+  // any prior amountDue. Recompute refund using the cancellation fee.
+  input.booking.amountDueVnd = 0;
+  const refund = calculateRefund({
+    bookingId: input.booking.id,
+    amountPaidVnd: input.booking.amountPaidVnd,
+    finalRoomChargeVnd: input.booking.finalRoomChargeVnd,
+    cancellationFeeVnd: fee,
+    minibarChargesVnd: input.booking.minibarChargesVnd,
+    damageChargesVnd: input.booking.damageChargesVnd,
+  });
+  input.booking.refundDueVnd = refund.refundDueVnd;
 
   return input.request;
 }

@@ -170,10 +170,15 @@ export function computeDailyChecklist(input: {
         b.status === "pending_payment" || b.paymentStatus === "proof_invalid",
     ),
     pendingExtraPayment: allBookings.filter(
-      (b) => b.status === "extra_payment_required" || b.amountDueVnd > 0,
+      (b) =>
+        b.status !== "cancelled" &&
+        b.status !== "closed" &&
+        (b.status === "extra_payment_required" || b.amountDueVnd > 0),
     ),
     pendingRefunds: allBookings.filter(
-      (b) => b.status === "refund_pending" || b.refundDueVnd > 0,
+      (b) =>
+        b.status !== "closed" &&
+        (b.status === "refund_pending" || b.refundDueVnd > 0),
     ),
     pendingCleaningJobs: allJobs.filter(
       (j) =>
