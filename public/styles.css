@@ -270,6 +270,20 @@ tr:hover td { background: #fafaf2; }
 .calendar-legend .swatch { display: inline-block; width: 12px; height: 12px; vertical-align: middle; margin: 0 4px 0 8px; border-radius: 3px; }
 .calendar-legend .maintenance-swatch { background: repeating-linear-gradient(135deg, #ccc 0, #ccc 3px, #eee 3px, #eee 6px); }
 
+/* Availability banner on booking forms */
+.availability-banner {
+  margin: 0.5rem 0 0;
+  padding: 0.6rem 0.85rem;
+  border-radius: 4px;
+  font-size: 0.92rem;
+  border: 1px solid var(--border);
+}
+.availability-banner.empty { background: #fafafa; color: var(--muted); }
+.availability-banner.checking { background: #f6f6f0; color: var(--muted); }
+.availability-banner.ok { background: #e6f4e8; color: var(--good); border-color: #b6dfbe; }
+.availability-banner.bad { background: #f7e3e3; color: var(--bad); border-color: #e7b9b9; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* Traditional Sun-Sat month grid */
 .month {
   background: #fff;

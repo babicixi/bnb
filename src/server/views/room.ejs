@@ -54,40 +54,39 @@
   <form method="post" action="/book/hold">
     <input type="hidden" name="roomId" value="<%= room.id %>" />
 
-    <div class="grid cols-2">
+    <div class="grid cols-2 booking-times">
       <div>
         <label><%= t('booking.checkin_date') %></label>
-        <input type="date" name="checkInDate" required />
+        <input type="date" id="bf-checkInDate" name="checkInDate" required />
+      </div>
+      <div>
+        <label><%= t('booking.checkout_date') %></label>
+        <input type="date" id="bf-checkOutDate" name="checkOutDate" required />
       </div>
       <% if (hourlyEnabled) { %>
         <div>
           <label><%= t('booking.checkin_time') %></label>
-          <select name="checkInTime" required>
+          <select id="bf-checkInTime" name="checkInTime" required>
             <% timeOptions.forEach(function(v){ %>
               <option value="<%= v %>" <%= v === '14:00' ? 'selected' : '' %>><%= v %></option>
             <% }) %>
           </select>
         </div>
-      <% } else { %>
-        <input type="hidden" name="checkInTime" value="14:00" />
-      <% } %>
-      <div>
-        <label><%= t('booking.checkout_date') %></label>
-        <input type="date" name="checkOutDate" required />
-      </div>
-      <% if (hourlyEnabled) { %>
         <div>
           <label><%= t('booking.checkout_time') %></label>
-          <select name="checkOutTime" required>
+          <select id="bf-checkOutTime" name="checkOutTime" required>
             <% timeOptions.forEach(function(v){ %>
               <option value="<%= v %>" <%= v === '11:00' ? 'selected' : '' %>><%= v %></option>
             <% }) %>
           </select>
         </div>
       <% } else { %>
-        <input type="hidden" name="checkOutTime" value="11:00" />
+        <input type="hidden" id="bf-checkInTime" name="checkInTime" value="14:00" />
+        <input type="hidden" id="bf-checkOutTime" name="checkOutTime" value="11:00" />
       <% } %>
     </div>
+
+    <div id="bf-availability" class="availability-banner empty">Pick check-in and check-out to see availability.</div>
 
     <p class="muted-small">
       <% if (hourlyEnabled) { %>
@@ -113,7 +112,69 @@
     <label><%= t('booking.notes') %></label>
     <textarea name="notes" rows="2"></textarea>
 
-    <p><button type="submit"><%= t('booking.reserve') %></button></p>
+    <p><button id="bf-submit" type="submit"><%= t('booking.reserve') %></button></p>
   </form>
 </div>
+
+<script>
+(function(){
+  var roomId = <%- JSON.stringify(room.id) %>;
+  var ci = document.getElementById('bf-checkInDate');
+  var co = document.getElementById('bf-checkOutDate');
+  var cit = document.getElementById('bf-checkInTime');
+  var cot = document.getElementById('bf-checkOutTime');
+  var banner = document.getElementById('bf-availability');
+  var submit = document.getElementById('bf-submit');
+  function fmtVnd(n){ return new Intl.NumberFormat('vi-VN').format(n) + ' ₫'; }
+  function fields(){
+    return [ci.value, cit.value, co.value, cot.value];
+  }
+  function compose(d, t){ return d && t ? d + 'T' + t : ''; }
+  var debounce;
+  var ctrl;
+  function check(){
+    var inAt = compose(ci.value, cit.value);
+    var outAt = compose(co.value, cot.value);
+    if (!inAt || !outAt) {
+      banner.className = 'availability-banner empty';
+      banner.textContent = 'Pick check-in and check-out to see availability.';
+      submit.disabled = false;
+      return;
+    }
+    if (ctrl) ctrl.abort();
+    ctrl = new AbortController();
+    banner.className = 'availability-banner checking';
+    banner.textContent = 'Checking availability…';
+    submit.disabled = true;
+    fetch('/book/check?roomId=' + encodeURIComponent(roomId) +
+          '&checkInAt=' + encodeURIComponent(inAt) +
+          '&checkOutAt=' + encodeURIComponent(outAt), { signal: ctrl.signal })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.available) {
+          banner.className = 'availability-banner ok';
+          var typeLabel = data.bookingType === 'hourly' ? 'hourly' : (data.bookingType === 'multi_day' ? 'multi-day' : 'day');
+          banner.innerHTML = '✓ Available · <strong>' + typeLabel + ' rate</strong> · total to collect: <strong>' + fmtVnd(data.amountToCollectVnd) + '</strong>' +
+            (data.convertedToDayRate ? ' (hourly past midnight → converted to day rate, check-out 11:00 next day)' : '');
+          submit.disabled = false;
+        } else {
+          banner.className = 'availability-banner bad';
+          banner.textContent = '✗ ' + (data.message || 'Not available.');
+          submit.disabled = true;
+        }
+      })
+      .catch(function(err){
+        if (err && err.name === 'AbortError') return;
+        banner.className = 'availability-banner bad';
+        banner.textContent = 'Could not check availability — please try again.';
+      });
+  }
+  function schedule(){ clearTimeout(debounce); debounce = setTimeout(check, 250); }
+  [ci, cit, co, cot].forEach(function(el){
+    if (!el) return;
+    el.addEventListener('change', schedule);
+    el.addEventListener('input', schedule);
+  });
+})();
+</script>
 <%- include('_footer') %>

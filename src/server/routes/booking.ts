@@ -88,6 +88,84 @@ export function mountBookingRoutes(
 
   const router = Router();
 
+  // Live availability check — used by the booking form's JS to show a
+  // green/red banner with the price preview before the guest hits submit.
+  router.get("/book/check", (req, res) => {
+    const roomId = String(req.query.roomId ?? "");
+    const room = repo.rooms.get(roomId);
+    if (!room) {
+      res.status(404).json({ available: false, message: "Room not found." });
+      return;
+    }
+    const checkInRaw = String(req.query.checkInAt ?? "");
+    const checkOutRaw = String(req.query.checkOutAt ?? "");
+    const checkInAt = parseVietnamLocal(checkInRaw);
+    const checkOutAt = parseVietnamLocal(checkOutRaw);
+    if (
+      Number.isNaN(checkInAt.getTime()) ||
+      Number.isNaN(checkOutAt.getTime())
+    ) {
+      res
+        .status(400)
+        .json({ available: false, message: "Pick check-in and check-out." });
+      return;
+    }
+    if (checkOutAt <= checkInAt) {
+      res
+        .status(400)
+        .json({ available: false, message: "Check-out must be after check-in." });
+      return;
+    }
+    expireOldHolds(repo.holds);
+    const availability = checkAvailability(
+      roomId,
+      checkInAt,
+      checkOutAt,
+      listAvailabilityContext(repo),
+    );
+    if (!availability.available) {
+      const reasons = availability.conflicts.map((c) => c.type);
+      res.json({
+        available: false,
+        message:
+          "That window overlaps " +
+          (reasons.includes("maintenance")
+            ? "a maintenance block."
+            : reasons.includes("hold")
+              ? "another guest's hold (try again in a few minutes)."
+              : "another booking (including its 1-hour cleaning buffer)."),
+      });
+      return;
+    }
+    const bookingType = (req.query.bookingType as
+      | "hourly"
+      | "day"
+      | "multi_day"
+      | undefined) ?? detectBookingType(checkInAt, checkOutAt);
+    try {
+      const price = calculateBookingPrice({
+        bookingType,
+        checkInAt,
+        checkOutAt,
+        room,
+        rates: repo.rates,
+      });
+      res.json({
+        available: true,
+        bookingType: price.bookingType,
+        amountToCollectVnd: price.amountToCollectVnd,
+        netRoomChargeVnd: price.netRoomChargeVnd,
+        roomChargeVnd: price.roomChargeVnd,
+        securityDepositVnd: price.securityDepositVnd,
+        checkInIso: price.checkInAt.toISOString(),
+        checkOutIso: price.checkOutAt.toISOString(),
+        convertedToDayRate: price.convertedToDayRate,
+      });
+    } catch (err) {
+      res.json({ available: false, message: (err as Error).message });
+    }
+  });
+
   router.post("/book/hold", (req, res) => {
     const parsed = holdRequestSchema.safeParse(req.body);
     if (!parsed.success) {

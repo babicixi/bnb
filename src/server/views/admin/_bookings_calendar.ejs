@@ -40,12 +40,30 @@
           <div class="day-cell <%= d.isWeekend ? 'weekend' : '' %> <%= d.isToday ? 'today' : '' %>"></div>
         <% }) %>
 
-        <% maintBars.forEach(function(mb){
-             var leftPct = ((mb.colStart - 1) / dayCount) * 100;
-             var widthPct = (mb.colSpan / dayCount) * 100;
+        <%
+          // Compute left% and width% for a bar. For partial-day (hourly)
+          // bars, divide the bar's day into 24h and use startHour/endHour.
+          // For multi-day, span full day cells.
+          function barPos(bar) {
+            var leftDays, widthDays;
+            if (bar.isPartialDay) {
+              leftDays = (bar.colStart - 1) + bar.startHour / 24;
+              widthDays = (bar.endHour - bar.startHour) / 24;
+            } else {
+              leftDays = bar.colStart - 1;
+              widthDays = bar.colSpan;
+            }
+            return {
+              left: (leftDays / dayCount) * 100,
+              width: (widthDays / dayCount) * 100,
+            };
+          }
         %>
-          <div class="cal-bar maintenance"
-               style="left: calc(<%= leftPct %>% + 2px); width: calc(<%= widthPct %>% - 4px);"
+        <% maintBars.forEach(function(mb){
+             var pos = barPos(mb);
+        %>
+          <div class="cal-bar maintenance <%= mb.isPartialDay ? 'partial' : '' %>"
+               style="left: calc(<%= pos.left %>% + 2px); width: calc(<%= pos.width %>% - 4px);"
                title="Maintenance: <%= mb.block.reason %><%= mb.block.notes ? ' — ' + mb.block.notes : '' %>">
             ⚙ <%= mb.block.reason %>
           </div>
@@ -53,12 +71,11 @@
         <% bars.forEach(function(bar){
              var b = bar.booking;
              var isHourly = b.bookingType === 'hourly';
-             var leftPct = ((bar.colStart - 1) / dayCount) * 100;
-             var widthPct = (bar.colSpan / dayCount) * 100;
+             var pos = barPos(bar);
         %>
-          <a class="cal-bar <%= b.status %>"
+          <a class="cal-bar <%= b.status %> <%= bar.isPartialDay ? 'partial' : '' %>"
              href="/admin/bookings/<%= b.id %>"
-             style="left: calc(<%= leftPct %>% + 2px); width: calc(<%= widthPct %>% - 4px);"
+             style="left: calc(<%= pos.left %>% + 2px); width: calc(<%= pos.width %>% - 4px);"
              title="<%= b.bookingNumber %> · <%= bar.guestName %> · <%= formatDateTime(b.checkInAt) %> → <%= formatDateTime(b.checkOutAt) %> · <%= b.status %>">
             <% if (isHourly) { %><strong><%= hhmmVN(b.checkInAt) %>–<%= hhmmVN(b.checkOutAt) %></strong> · <% } %><%= bar.guestName %>
           </a>

@@ -107,14 +107,33 @@ function buildWeekView(input: {
     guestName: string;
     colStart: number;
     colSpan: number;
+    /** Vietnam-local start hour within the first visible day (0-24). */
+    startHour: number;
+    /** Vietnam-local end hour within the last visible day (0-24). */
+    endHour: number;
+    /** True when the booking is wholly inside a single day cell. */
+    isPartialDay: boolean;
   };
   type MaintBar = {
     block: import("../../domain/types.js").MaintenanceBlock;
     colStart: number;
     colSpan: number;
+    startHour: number;
+    endHour: number;
+    isPartialDay: boolean;
   };
   const barsByRoom: Record<string, Bar[]> = {};
   const maintBarsByRoom: Record<string, MaintBar[]> = {};
+
+  // Vietnam-local hour-of-day for `d`, clamped to [0, 24] relative to the
+  // calendar day identified by `dayIso`. Used to position bars within a cell.
+  function vnHourOnDay(d: Date, dayIso: string): number {
+    const vn = new Date(d.getTime() + 7 * 60 * 60_000);
+    const iso = vn.toISOString().slice(0, 10);
+    if (iso < dayIso) return 0;
+    if (iso > dayIso) return 24;
+    return vn.getUTCHours() + vn.getUTCMinutes() / 60;
+  }
 
   function colsFor(start: Date, end: Date): { colStart: number; colSpan: number } | null {
     if (end <= weekStart || start >= weekEnd) return null;
@@ -146,19 +165,39 @@ function buildWeekView(input: {
     const cols = colsFor(b.checkInAt, b.checkOutAt);
     if (!cols) continue;
     const guest = input.guests.get(b.guestId);
+    const startDayIso = days[cols.colStart - 1]?.iso ?? "";
+    const endDayIso = days[cols.colStart - 1 + cols.colSpan - 1]?.iso ?? "";
+    const startHour = vnHourOnDay(b.checkInAt, startDayIso);
+    const endHour = vnHourOnDay(b.checkOutAt, endDayIso);
     (barsByRoom[b.roomId] ??= []).push({
       booking: b,
       guestName: guest ? guest.fullName : "—",
       ...cols,
+      startHour,
+      endHour,
+      isPartialDay: b.bookingType === "hourly" && cols.colSpan === 1,
     });
   }
   for (const list of Object.values(barsByRoom)) {
-    list.sort((a, b) => a.colStart - b.colStart);
+    list.sort(
+      (a, b) =>
+        a.colStart - b.colStart ||
+        a.startHour - b.startHour ||
+        b.colSpan - a.colSpan,
+    );
   }
   for (const m of input.maintenance) {
     const cols = colsFor(m.startsAt, m.endsAt);
     if (!cols) continue;
-    (maintBarsByRoom[m.roomId] ??= []).push({ block: m, ...cols });
+    const startDayIso = days[cols.colStart - 1]?.iso ?? "";
+    const endDayIso = days[cols.colStart - 1 + cols.colSpan - 1]?.iso ?? "";
+    (maintBarsByRoom[m.roomId] ??= []).push({
+      block: m,
+      ...cols,
+      startHour: vnHourOnDay(m.startsAt, startDayIso),
+      endHour: vnHourOnDay(m.endsAt, endDayIso),
+      isPartialDay: cols.colSpan === 1,
+    });
   }
 
   function buildQuery(anchorIso: string): string {

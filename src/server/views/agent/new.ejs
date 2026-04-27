@@ -25,10 +25,14 @@
       This room is <strong>nightly only</strong> — times are locked to standard 14:00 / 11:00.
     </p>
 
-    <div class="grid cols-2">
+    <div class="grid cols-2 booking-times">
       <div>
         <label><%= t('booking.checkin_date') %></label>
-        <input type="date" name="checkInDate" required />
+        <input type="date" id="checkInDate" name="checkInDate" required />
+      </div>
+      <div>
+        <label><%= t('booking.checkout_date') %></label>
+        <input type="date" id="checkOutDate" name="checkOutDate" required />
       </div>
       <div>
         <label><%= t('booking.checkin_time') %></label>
@@ -39,10 +43,6 @@
         </select>
       </div>
       <div>
-        <label><%= t('booking.checkout_date') %></label>
-        <input type="date" name="checkOutDate" required />
-      </div>
-      <div>
         <label><%= t('booking.checkout_time') %></label>
         <select name="checkOutTime" id="checkOutTime" required>
           <% timeOptions.forEach(function(v){ %>
@@ -51,6 +51,8 @@
         </select>
       </div>
     </div>
+
+    <div id="bf-availability" class="availability-banner empty">Pick a room and times to see availability.</div>
 
     <p class="muted-small">
       Booking type is detected automatically from the times.
@@ -63,6 +65,10 @@
       var notice = document.getElementById('dayOnlyNotice');
       var ci = document.getElementById('checkInTime');
       var co = document.getElementById('checkOutTime');
+      var ciDate = document.getElementById('checkInDate');
+      var coDate = document.getElementById('checkOutDate');
+      var banner = document.getElementById('bf-availability');
+      var submit = sel.closest('form').querySelector('button[type="submit"]');
       function sync(){
         var opt = sel.options[sel.selectedIndex];
         var dayOnly = opt && opt.dataset.hourly === '0';
@@ -75,7 +81,53 @@
           co.disabled = false;
         }
       }
-      sel.addEventListener('change', sync);
+      function fmtVnd(n){ return new Intl.NumberFormat('vi-VN').format(n) + ' ₫'; }
+      function compose(d, t){ return d && t ? d + 'T' + t : ''; }
+      var debounce, ctrl;
+      function check(){
+        var inAt = compose(ciDate.value, ci.value);
+        var outAt = compose(coDate.value, co.value);
+        var roomId = sel.value;
+        if (!roomId || !inAt || !outAt) {
+          banner.className = 'availability-banner empty';
+          banner.textContent = 'Pick a room and times to see availability.';
+          submit.disabled = false;
+          return;
+        }
+        if (ctrl) ctrl.abort();
+        ctrl = new AbortController();
+        banner.className = 'availability-banner checking';
+        banner.textContent = 'Checking availability…';
+        submit.disabled = true;
+        fetch('/book/check?roomId=' + encodeURIComponent(roomId) +
+              '&checkInAt=' + encodeURIComponent(inAt) +
+              '&checkOutAt=' + encodeURIComponent(outAt), { signal: ctrl.signal })
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if (data.available) {
+              banner.className = 'availability-banner ok';
+              var typeLabel = data.bookingType === 'hourly' ? 'hourly' : (data.bookingType === 'multi_day' ? 'multi-day' : 'day');
+              banner.innerHTML = '✓ Available · <strong>' + typeLabel + ' rate</strong> · total: <strong>' + fmtVnd(data.amountToCollectVnd) + '</strong> (before discount)';
+              submit.disabled = false;
+            } else {
+              banner.className = 'availability-banner bad';
+              banner.textContent = '✗ ' + (data.message || 'Not available.');
+              submit.disabled = true;
+            }
+          })
+          .catch(function(err){
+            if (err && err.name === 'AbortError') return;
+            banner.className = 'availability-banner bad';
+            banner.textContent = 'Could not check availability — please try again.';
+          });
+      }
+      function schedule(){ clearTimeout(debounce); debounce = setTimeout(check, 250); }
+      sel.addEventListener('change', function(){ sync(); schedule(); });
+      [ciDate, coDate, ci, co].forEach(function(el){
+        if (!el) return;
+        el.addEventListener('change', schedule);
+        el.addEventListener('input', schedule);
+      });
       sync();
       // Re-enable on submit so disabled selects still post their values
       var form = sel.closest('form');
