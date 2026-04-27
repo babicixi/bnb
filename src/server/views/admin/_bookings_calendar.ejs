@@ -4,6 +4,7 @@
     var s = new Date(d.getTime() + 7 * 60 * 60_000).toISOString();
     return s.slice(11, 16);
   }
+  var dayCount = calendar.days.length; // 7
 %>
 <div class="calendar week">
   <div class="calendar-header">
@@ -15,49 +16,54 @@
     </span>
   </div>
 
-  <%
-    const dayCount = calendar.days.length;
-    const colTemplate = '180px repeat(' + dayCount + ', minmax(160px, 1fr))';
-  %>
-
-  <div class="cal-day-strip" style="display:grid; grid-template-columns: <%= colTemplate %>;">
-    <div class="col-head">Room</div>
-    <% calendar.days.forEach(function(d){ %>
-      <div class="col-head <%= d.isWeekend ? 'weekend' : '' %> <%= d.isToday ? 'today' : '' %>" title="<%= d.label %>">
-        <%= d.dow %><br><strong style="font-size:1.05rem;"><%= d.day %></strong>
-        <span class="muted-small"><%= d.month %></span>
-      </div>
-    <% }) %>
+  <div class="cal-room-row cal-header-row">
+    <div class="row-head">Room</div>
+    <div class="cal-day-track">
+      <% calendar.days.forEach(function(d){ %>
+        <div class="day-cell head <%= d.isWeekend ? 'weekend' : '' %> <%= d.isToday ? 'today' : '' %>">
+          <span class="dow"><%= d.dow %></span>
+          <strong class="dnum"><%= d.day %></strong>
+          <span class="dmonth"><%= d.month %></span>
+        </div>
+      <% }) %>
+    </div>
   </div>
 
   <% rooms.forEach(function(r){
        var bars = calendar.barsByRoom[r.id] || [];
        var maintBars = calendar.maintBarsByRoom[r.id] || [];
   %>
-    <div class="cal-room-row" style="display:grid; grid-template-columns: <%= colTemplate %>; min-height: 56px;">
+    <div class="cal-room-row">
       <div class="row-head"><%= r.name %><br><span class="muted-small">Room <%= r.roomNumber || '—' %></span></div>
-      <% calendar.days.forEach(function(d){ %>
-        <div class="day-cell <%= d.isWeekend ? 'weekend' : '' %> <%= d.isToday ? 'today' : '' %>"></div>
-      <% }) %>
+      <div class="cal-day-track">
+        <% calendar.days.forEach(function(d){ %>
+          <div class="day-cell <%= d.isWeekend ? 'weekend' : '' %> <%= d.isToday ? 'today' : '' %>"></div>
+        <% }) %>
 
-      <% maintBars.forEach(function(mb){ %>
-        <div class="cal-bar maintenance"
-             style="grid-row: 1; grid-column: <%= mb.colStart + 1 %> / span <%= mb.colSpan %>;"
-             title="Maintenance: <%= mb.block.reason %><%= mb.block.notes ? ' — ' + mb.block.notes : '' %>">
-          ⚙ <%= mb.block.reason %>
-        </div>
-      <% }) %>
-      <% bars.forEach(function(bar){
-           var b = bar.booking;
-           var isHourly = b.bookingType === 'hourly';
-      %>
-        <a class="cal-bar <%= b.status %>"
-           href="/admin/bookings/<%= b.id %>"
-           style="grid-row: 1; grid-column: <%= bar.colStart + 1 %> / span <%= bar.colSpan %>;"
-           title="<%= b.bookingNumber %> · <%= bar.guestName %> · <%= formatDateTime(b.checkInAt) %> → <%= formatDateTime(b.checkOutAt) %> · <%= b.status %>">
-          <% if (isHourly) { %><strong><%= hhmmVN(b.checkInAt) %>–<%= hhmmVN(b.checkOutAt) %></strong> · <% } %><%= bar.guestName %>
-        </a>
-      <% }) %>
+        <% maintBars.forEach(function(mb){
+             var leftPct = ((mb.colStart - 1) / dayCount) * 100;
+             var widthPct = (mb.colSpan / dayCount) * 100;
+        %>
+          <div class="cal-bar maintenance"
+               style="left: calc(<%= leftPct %>% + 2px); width: calc(<%= widthPct %>% - 4px);"
+               title="Maintenance: <%= mb.block.reason %><%= mb.block.notes ? ' — ' + mb.block.notes : '' %>">
+            ⚙ <%= mb.block.reason %>
+          </div>
+        <% }) %>
+        <% bars.forEach(function(bar){
+             var b = bar.booking;
+             var isHourly = b.bookingType === 'hourly';
+             var leftPct = ((bar.colStart - 1) / dayCount) * 100;
+             var widthPct = (bar.colSpan / dayCount) * 100;
+        %>
+          <a class="cal-bar <%= b.status %>"
+             href="/admin/bookings/<%= b.id %>"
+             style="left: calc(<%= leftPct %>% + 2px); width: calc(<%= widthPct %>% - 4px);"
+             title="<%= b.bookingNumber %> · <%= bar.guestName %> · <%= formatDateTime(b.checkInAt) %> → <%= formatDateTime(b.checkOutAt) %> · <%= b.status %>">
+            <% if (isHourly) { %><strong><%= hhmmVN(b.checkInAt) %>–<%= hhmmVN(b.checkOutAt) %></strong> · <% } %><%= bar.guestName %>
+          </a>
+        <% }) %>
+      </div>
     </div>
   <% }) %>
 

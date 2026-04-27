@@ -15,11 +15,15 @@
   <% if (error) { %><p class="error"><%= error %></p><% } %>
   <form method="post" action="/agent/new">
     <label>Room</label>
-    <select name="roomId" required>
+    <select name="roomId" id="roomSelect" required>
       <% rooms.forEach(function(r){ %>
-        <option value="<%= r.id %>"><%= r.name %> (<%= formatVnd(r.baseDayRateVnd) %>/day)</option>
+        <option value="<%= r.id %>" data-hourly="<%= r.hourlyEnabled !== false ? '1' : '0' %>"><%= r.name %> (<%= formatVnd(r.baseDayRateVnd) %>/day)<%= r.hourlyEnabled === false ? ' · day-only' : '' %></option>
       <% }) %>
     </select>
+
+    <p id="dayOnlyNotice" class="muted-small" style="display:none; background:#fff5e6; padding:0.5rem 0.75rem; border-radius:4px; border:1px solid #f0d4a8; margin-top:0.5rem;">
+      This room is <strong>nightly only</strong> — times are locked to standard 14:00 / 11:00.
+    </p>
 
     <div class="grid cols-2">
       <div>
@@ -28,7 +32,7 @@
       </div>
       <div>
         <label><%= t('booking.checkin_time') %></label>
-        <select name="checkInTime" required>
+        <select name="checkInTime" id="checkInTime" required>
           <% timeOptions.forEach(function(v){ %>
             <option value="<%= v %>" <%= v === '14:00' ? 'selected' : '' %>><%= v %></option>
           <% }) %>
@@ -40,7 +44,7 @@
       </div>
       <div>
         <label><%= t('booking.checkout_time') %></label>
-        <select name="checkOutTime" required>
+        <select name="checkOutTime" id="checkOutTime" required>
           <% timeOptions.forEach(function(v){ %>
             <option value="<%= v %>" <%= v === '11:00' ? 'selected' : '' %>><%= v %></option>
           <% }) %>
@@ -52,6 +56,34 @@
       Booking type is detected automatically from the times.
       Day &amp; multi-day check-in must be at or after 14:00.
     </p>
+
+    <script>
+    (function(){
+      var sel = document.getElementById('roomSelect');
+      var notice = document.getElementById('dayOnlyNotice');
+      var ci = document.getElementById('checkInTime');
+      var co = document.getElementById('checkOutTime');
+      function sync(){
+        var opt = sel.options[sel.selectedIndex];
+        var dayOnly = opt && opt.dataset.hourly === '0';
+        notice.style.display = dayOnly ? '' : 'none';
+        if (dayOnly) {
+          ci.value = '14:00'; ci.disabled = true;
+          co.value = '11:00'; co.disabled = true;
+        } else {
+          ci.disabled = false;
+          co.disabled = false;
+        }
+      }
+      sel.addEventListener('change', sync);
+      sync();
+      // Re-enable on submit so disabled selects still post their values
+      var form = sel.closest('form');
+      form.addEventListener('submit', function(){
+        ci.disabled = false; co.disabled = false;
+      });
+    })();
+    </script>
 
     <h3>Guest</h3>
     <label>Name</label><input name="guestName" required />
