@@ -46,11 +46,32 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
     });
   });
 
-  router.get("/new", (_req, res) => {
+  router.get("/new", (req, res) => {
+    const agent = (req as RequestWithUser).currentUser!;
+    const usable = repo.discounts.filter(
+      (d) =>
+        d.isActive &&
+        (d.scope === "global" || d.salesAgentId === agent.id),
+    );
+    const usageByDiscount = new Map<string, number>();
+    for (const b of repo.bookings.values()) {
+      if (b.discountIdApplied) {
+        usageByDiscount.set(
+          b.discountIdApplied,
+          (usageByDiscount.get(b.discountIdApplied) ?? 0) + 1,
+        );
+      }
+    }
+    const discounts = usable.map((d) => {
+      const used = usageByDiscount.get(d.id) ?? 0;
+      const exhausted =
+        d.usageLimit !== undefined && used >= d.usageLimit;
+      return { ...d, used, exhausted };
+    });
     res.render("agent/new", {
       title: "New booking",
       rooms: Array.from(repo.rooms.values()),
-      discounts: Array.from(repo.discounts).filter((d) => d.isActive),
+      discounts,
       error: null,
     });
   });
@@ -90,7 +111,7 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
       res.status(400).render("agent/new", {
         title: "New booking",
         rooms: Array.from(repo.rooms.values()),
-        discounts: Array.from(repo.discounts).filter((d) => d.isActive),
+        discounts: repo.discounts.filter((d) => d.isActive),
         error: "Please complete all fields.",
       });
       return;

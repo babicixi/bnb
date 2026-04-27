@@ -123,6 +123,7 @@ export function seedRepository(repo: Repository): DemoCredential[] {
       description: "Cozy studio with private balcony overlooking Nguyen Hue.",
       features: ["Balcony", "Smart TV", "Air conditioning", "Fast Wi-Fi"],
       photoUrls: ["https://placehold.co/600x400?text=Studio+Balcony"],
+      videoUrls: ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
       syncStatus: "not_synced" as const,
     },
     {

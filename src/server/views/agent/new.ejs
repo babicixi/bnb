@@ -66,8 +66,16 @@
     <label>Apply discount</label>
     <select name="discountId">
       <option value="">— none —</option>
-      <% discounts.forEach(function(d){ %>
-        <option value="<%= d.id %>"><%= d.name %> (<%= d.scope %>)</option>
+      <% discounts.forEach(function(d){
+           var label = d.name + ' (' + d.scope + ', ' + (d.discountType === 'percentage' ? d.value + '%' : formatVnd(d.value)) + ')';
+           if (d.usageLimit !== undefined) {
+             label += ' · used ' + (d.used || 0) + '/' + d.usageLimit;
+           } else if (d.used) {
+             label += ' · used ' + d.used;
+           }
+           if (d.exhausted) label += ' · LIMIT REACHED';
+      %>
+        <option value="<%= d.id %>" <%= d.exhausted ? 'disabled' : '' %>><%= label %></option>
       <% }) %>
     </select>
 

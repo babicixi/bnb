@@ -11,6 +11,14 @@
   </div>
 <% } %>
 
+<% if (room.videoUrls && room.videoUrls.length) { %>
+  <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+    <% room.videoUrls.forEach(function(u){ %>
+      <%- videoEmbed(u) %>
+    <% }) %>
+  </div>
+<% } %>
+
 <% if (room.description) { %><p><%= room.description %></p><% } %>
 
 <% if (room.features && room.features.length) { %>

@@ -78,6 +78,7 @@ export interface Room {
   description?: string;
   features?: string[];
   photoUrls?: string[];
+  videoUrls?: string[];
   externalChannel?: string;
   externalCalendarEventId?: string;
   syncStatus: SyncStatus;

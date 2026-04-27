@@ -72,6 +72,9 @@
           <form method="post" action="/admin/cleaners/<%= row.cleaner.id %>/toggle" style="display:inline">
             <button type="submit" class="secondary"><%= row.cleaner.isActive ? 'Deactivate' : 'Activate' %> cleaner</button>
           </form>
+          <form method="post" action="/admin/cleaners/<%= row.cleaner.id %>/delete" onsubmit="return confirm('Permanently delete this cleaner? Only allowed if they have no jobs or payments.')" style="display:inline; margin-left:0.5rem;">
+            <button type="submit" class="danger">Permanently delete</button>
+          </form>
         </p>
       </div>
 

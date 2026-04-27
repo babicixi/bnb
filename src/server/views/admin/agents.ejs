@@ -86,11 +86,16 @@
           </div>
           <p>
             <button type="submit" class="secondary">Update rule</button>
-            <form method="post" action="/admin/agents/<%= row.agent.id %>/toggle" style="display:inline">
-              <button type="submit" class="secondary"><%= row.agent.isActive ? 'Deactivate' : 'Activate' %> agent</button>
-            </form>
           </p>
         </form>
+        <p>
+          <form method="post" action="/admin/agents/<%= row.agent.id %>/toggle" style="display:inline">
+            <button type="submit" class="secondary"><%= row.agent.isActive ? 'Deactivate' : 'Activate' %> agent</button>
+          </form>
+          <form method="post" action="/admin/agents/<%= row.agent.id %>/delete" onsubmit="return confirm('Permanently delete this agent? Only allowed if they have no bookings or payments.')" style="display:inline; margin-left:0.5rem;">
+            <button type="submit" class="danger">Permanently delete</button>
+          </form>
+        </p>
       </div>
 
       <div>

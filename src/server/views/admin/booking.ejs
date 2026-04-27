@@ -1,66 +1,185 @@
 <%- include('../_header') %>
 <%- include('_nav') %>
-<h1>Booking <%= booking.bookingNumber %></h1>
-<p><a href="/admin">← Back to dashboard</a></p>
-<p>Status: <span class="badge"><%= booking.status %></span> · Payment: <span class="badge"><%= booking.paymentStatus %></span></p>
+<h1>
+  Booking <%= booking.bookingNumber %>
+  <span class="badge"><%= booking.status %></span>
+  <span class="badge"><%= booking.paymentStatus %></span>
+</h1>
+<p><a href="/admin">← All bookings</a> · <a href="/admin?view=calendar">Calendar</a></p>
+
+<%
+  // Generate 30-min time options (24h)
+  const timeOptions = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      timeOptions.push(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
+    }
+  }
+  function dateOnly(d) { return d ? d.toISOString().slice(0,10) : ''; }
+  function hhmm(d) {
+    if (!d) return '14:00';
+    const utcMs = d.getTime() + 7 * 60 * 60_000; // Vietnam-shifted UTC
+    const v = new Date(utcMs);
+    return String(v.getUTCHours()).padStart(2,'0') + ':' + String(v.getUTCMinutes()).padStart(2,'0');
+  }
+  function vietnamDate(d) {
+    if (!d) return '';
+    const utcMs = d.getTime() + 7 * 60 * 60_000;
+    return new Date(utcMs).toISOString().slice(0,10);
+  }
+%>
 
 <div class="grid cols-2">
   <div class="card">
     <h2>Stay</h2>
-    <p>Room: <%= room && room.name %></p>
-    <p>Check-in: <%= formatDateTime(booking.checkInAt) %></p>
-    <p>Check-out: <%= formatDateTime(booking.checkOutAt) %></p>
-    <p>Type: <%= booking.bookingType %></p>
-    <p>Source: <%= booking.source || '—' %></p>
+    <p>Room: <strong><%= room ? room.name : '—' %></strong>
+      <% if (building) { %><br><span class="muted-small"><%= building.name %><% if (room && room.roomNumber) { %> · room <%= room.roomNumber %><% } %></span><% } %>
+    </p>
+    <p>Check-in: <strong><%= formatDateTime(booking.checkInAt) %></strong></p>
+    <p>Check-out: <strong><%= formatDateTime(booking.checkOutAt) %></strong></p>
+    <p>Type: <%= booking.bookingType %> <span class="muted-small">· source: <%= booking.source || '—' %></span></p>
+    <% if (booking.paymentDeadlineAt && booking.status === 'pending_payment') { %>
+      <p class="muted-small">Payment deadline: <%= formatDateTime(booking.paymentDeadlineAt) %></p>
+    <% } %>
   </div>
+
   <div class="card">
     <h2>Guest</h2>
-    <p><%= guest && guest.fullName %></p>
-    <p><%= guest && guest.phone %></p>
-    <% if (guest && guest.email) { %><p><%= guest.email %></p><% } %>
+    <% if (guest) { %>
+      <p><strong><%= guest.fullName %></strong></p>
+      <p>📞 <%= guest.phone %></p>
+      <% if (guest.email) { %><p>✉️ <a href="mailto:<%= guest.email %>"><%= guest.email %></a></p><% } %>
+      <% if (guest.facebookHandle) { %><p>fb: <%= guest.facebookHandle %></p><% } %>
+      <% if (guest.instagramHandle) { %><p>ig: <%= guest.instagramHandle %></p><% } %>
+    <% } else { %>
+      <p class="muted">Guest record missing.</p>
+    <% } %>
   </div>
+
   <div class="card">
-    <h2>Charges</h2>
-    <p>Room: <%= formatVnd(booking.finalRoomChargeVnd) %></p>
-    <p>Discount: <%= formatVnd(booking.discountAmountVnd) %></p>
-    <p>Deposit: <%= formatVnd(booking.securityDepositVnd) %></p>
-    <p>Paid: <%= formatVnd(booking.amountPaidVnd) %></p>
-    <p>Due: <%= formatVnd(booking.amountDueVnd) %></p>
-    <p>Refund: <%= formatVnd(booking.refundDueVnd) %></p>
-    <p>Minibar: <%= formatVnd(booking.minibarChargesVnd) %></p>
-    <p>Damages: <%= formatVnd(booking.damageChargesVnd) %></p>
-    <p>Commission: <%= formatVnd(booking.calculatedCommissionVnd) %></p>
+    <h2>Sales agent</h2>
+    <% if (agent) { %>
+      <p><strong><%= agent.fullName %></strong></p>
+      <p class="muted-small"><%= agent.email %></p>
+      <% if (discount) { %>
+        <p>Discount applied: <strong><%= discount.name %></strong>
+          (<%= discount.discountType === 'percentage' ? discount.value + '%' : formatVnd(discount.value) %>)</p>
+      <% } %>
+      <% if (ledgerEntries && ledgerEntries.length) { %>
+        <p>Commission ledger: <strong><%= formatVnd(ledgerEntries[0].amountVnd) %></strong>
+          <span class="badge"><%= ledgerEntries[0].status %></span></p>
+      <% } else if (booking.calculatedCommissionVnd > 0) { %>
+        <p>Calculated commission: <%= formatVnd(booking.calculatedCommissionVnd) %></p>
+      <% } %>
+    <% } else { %>
+      <p class="muted">No sales agent — direct booking.</p>
+    <% } %>
   </div>
+
   <div class="card">
     <h2>Cleaning</h2>
     <% if (cleaningJob) { %>
-      <p>Job <code><%= cleaningJob.id %></code></p>
       <p>Status: <span class="badge"><%= cleaningJob.status %></span></p>
       <p>Window: <%= formatDateTime(cleaningJob.windowStartAt) %> – <%= formatDateTime(cleaningJob.windowEndAt) %></p>
-      <p>Assigned to: <%= cleaningJob.assignedToUserId || '—' %></p>
+      <p>Cleaner: <%= cleaner ? cleaner.fullName : '—' %></p>
+      <p>Fixed pay: <%= formatVnd(cleaningJob.fixedPayVnd) %></p>
+      <% if (cleaningJob.damageNotes) { %><p>Damage notes: <%= cleaningJob.damageNotes %></p><% } %>
     <% } else { %><p class="muted">No cleaning job yet.</p><% } %>
     <form method="post" action="/admin/bookings/<%= booking.id %>/assign-cleaner">
       <label>Assign / reassign cleaner</label>
       <select name="cleanerId">
         <% cleaners.forEach(function(c){ %>
-          <option value="<%= c.userId %>"><%= c.user ? c.user.fullName : c.userId %> (jobs: <%= c.jobsCompleted %>)</option>
+          <option value="<%= c.userId %>" <%= cleaningJob && cleaningJob.assignedToUserId === c.userId ? 'selected' : '' %>>
+            <%= c.user ? c.user.fullName : c.userId %> (jobs done: <%= c.jobsCompleted %>)
+          </option>
         <% }) %>
       </select>
-      <p><button type="submit">Assign</button></p>
+      <p><button type="submit" class="secondary">Save assignment</button></p>
     </form>
   </div>
 </div>
 
 <div class="card">
+  <h2>Money</h2>
+  <table>
+    <tr><th>Room charge</th><td><%= formatVnd(booking.finalRoomChargeVnd) %></td>
+        <th>Discount</th><td><%= formatVnd(booking.discountAmountVnd) %></td></tr>
+    <tr><th>Security deposit</th><td><%= formatVnd(booking.securityDepositVnd) %></td>
+        <th>Minibar</th><td><%= formatVnd(booking.minibarChargesVnd) %></td></tr>
+    <tr><th>Damages</th><td><%= formatVnd(booking.damageChargesVnd) %></td>
+        <th>Commission (calc.)</th><td><%= formatVnd(booking.calculatedCommissionVnd) %></td></tr>
+    <tr><th>Amount paid</th><td><%= formatVnd(booking.amountPaidVnd) %></td>
+        <th>Amount due</th><td><strong><%= formatVnd(booking.amountDueVnd) %></strong></td></tr>
+    <tr><th>Refund due</th><td><strong><%= formatVnd(booking.refundDueVnd) %></strong></td>
+        <th>Total collectable</th><td><%= formatVnd(booking.finalRoomChargeVnd + booking.securityDepositVnd) %></td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Minibar usage <span class="muted-small">· total <%= formatVnd(booking.minibarChargesVnd) %></span></h2>
+  <% if (!minibarLines || minibarLines.length === 0) { %>
+    <p class="muted">None reported yet.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Reported at</th><th>Item</th><th>Qty</th><th>Total</th></tr></thead>
+      <tbody>
+        <% minibarLines.forEach(function(u){ %>
+          <tr>
+            <td><%= formatDateTime(u.createdAt) %></td>
+            <td><%= u.item ? u.item.name : u.minibarItemId %></td>
+            <td><%= u.quantity %></td>
+            <td><%= formatVnd(u.totalVnd) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<div class="card">
   <h2>Edit times</h2>
+  <p class="muted-small">Times use 30-min steps. Booking type re-detects automatically from the new times unless you override below.</p>
   <form method="post" action="/admin/bookings/<%= booking.id %>/edit">
-    <label>Check-in</label>
-    <input type="datetime-local" name="checkInAt" value="<%= booking.checkInAt.toISOString().slice(0,16) %>" required />
-    <label>Check-out</label>
-    <input type="datetime-local" name="checkOutAt" value="<%= booking.checkOutAt.toISOString().slice(0,16) %>" required />
+    <div class="grid cols-2">
+      <div>
+        <label>Check-in date</label>
+        <input type="date" name="checkInDate" value="<%= vietnamDate(booking.checkInAt) %>" required />
+      </div>
+      <div>
+        <label>Check-in time</label>
+        <% const inHm = hhmm(booking.checkInAt); %>
+        <select name="checkInTime" required>
+          <% timeOptions.forEach(function(v){ %>
+            <option value="<%= v %>" <%= v === inHm ? 'selected' : '' %>><%= v %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div>
+        <label>Check-out date</label>
+        <input type="date" name="checkOutDate" value="<%= vietnamDate(booking.checkOutAt) %>" required />
+      </div>
+      <div>
+        <label>Check-out time</label>
+        <% const outHm = hhmm(booking.checkOutAt); %>
+        <select name="checkOutTime" required>
+          <% timeOptions.forEach(function(v){ %>
+            <option value="<%= v %>" <%= v === outHm ? 'selected' : '' %>><%= v %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div>
+        <label>Booking type override (optional)</label>
+        <select name="bookingType">
+          <option value="">— auto-detect from times —</option>
+          <% ['hourly','day','multi_day'].forEach(function(t){ %>
+            <option value="<%= t %>" <%= t === booking.bookingType ? 'selected' : '' %>><%= t %></option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
     <label>Internal notes</label>
     <textarea name="notes" rows="2"><%= booking.notes || '' %></textarea>
-    <p><button type="submit">Save</button></p>
+    <p><button type="submit">Save changes</button></p>
   </form>
 </div>
 
@@ -72,7 +191,7 @@
     <% proofs.forEach(function(p){ %>
       <div class="image-thumb">
         <a href="<%= p.fileUrl %>" target="_blank"><img src="<%= p.fileUrl %>" alt="proof" /></a>
-        <p class="muted-small"><%= p.status %><% if (p.invalidReason) { %> — <%= p.invalidReason %><% } %></p>
+        <p class="muted-small"><%= p.status %><% if (p.invalidReason) { %> — <%= p.invalidReason %><% } %><br>uploaded <%= formatDateTime(p.createdAt) %></p>
       </div>
     <% }) %>
     <form method="post" action="/admin/bookings/<%= booking.id %>/proof-invalid">
@@ -86,11 +205,15 @@
 <div class="card">
   <h2>Cancellation</h2>
   <% if (cancellation) { %>
-    <p>Status: <%= cancellation.status %> · fee: <%= formatVnd(cancellation.cancellationFeeVnd) %></p>
+    <p>Status: <span class="badge"><%= cancellation.status %></span> · fee: <%= formatVnd(cancellation.cancellationFeeVnd) %>
+      <% if (cancellation.reason) { %><br><span class="muted-small">Reason: <%= cancellation.reason %></span><% } %>
+    </p>
   <% } %>
-  <form method="post" action="/admin/bookings/<%= booking.id %>/cancel" onsubmit="return confirm('Cancel this booking?')">
-    <p><button type="submit" class="danger">Cancel booking</button></p>
-  </form>
+  <% if (booking.status !== 'cancelled') { %>
+    <form method="post" action="/admin/bookings/<%= booking.id %>/cancel" onsubmit="return confirm('Cancel this booking?')">
+      <p><button type="submit" class="danger">Cancel booking</button></p>
+    </form>
+  <% } %>
 </div>
 
 <div class="card">

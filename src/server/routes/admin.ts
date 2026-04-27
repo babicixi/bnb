@@ -94,65 +94,80 @@ function buildCalendar(input: {
     });
   }
 
-  const byRoomDay: Record<
-    string,
-    Record<string, Array<{ booking: import("../../domain/types.js").Booking; guestName: string }>>
-  > = {};
-  const maintenanceByRoomDay: Record<
-    string,
-    Record<string, Array<import("../../domain/types.js").MaintenanceBlock>>
-  > = {};
+  // Bars: one entry per booking that intersects the visible month, with
+  // grid-column start/span computed so the front-end can render a single
+  // multi-day bar instead of a label per cell.
+  type Bar = {
+    booking: import("../../domain/types.js").Booking;
+    guestName: string;
+    colStart: number; // 1-based among day columns
+    colSpan: number;
+  };
+  type MaintBar = {
+    block: import("../../domain/types.js").MaintenanceBlock;
+    colStart: number;
+    colSpan: number;
+  };
+  const barsByRoom: Record<string, Bar[]> = {};
+  const maintBarsByRoom: Record<string, MaintBar[]> = {};
 
   const monthStart = firstDay;
   const monthEnd = nextMonth;
 
-  for (const b of input.bookings) {
-    if (b.status === "cancelled" || b.status === "held") continue;
-    const start = b.checkInAt < monthStart ? monthStart : b.checkInAt;
-    const end = b.checkOutAt > monthEnd ? monthEnd : b.checkOutAt;
-    if (start >= monthEnd || end <= monthStart) continue;
-    const guest = input.guests.get(b.guestId);
-    const guestName = guest ? guest.fullName : "—";
-    let cursor = new Date(
+  function colsFor(start: Date, end: Date): { colStart: number; colSpan: number } | null {
+    const clampedStart = start < monthStart ? monthStart : start;
+    const clampedEnd = end > monthEnd ? monthEnd : end;
+    if (clampedStart >= monthEnd || clampedEnd <= monthStart) return null;
+    const startDay = new Date(
       Date.UTC(
-        start.getUTCFullYear(),
-        start.getUTCMonth(),
-        start.getUTCDate(),
+        clampedStart.getUTCFullYear(),
+        clampedStart.getUTCMonth(),
+        clampedStart.getUTCDate(),
       ),
     );
     const endDay = new Date(
-      Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()),
+      Date.UTC(
+        clampedEnd.getUTCFullYear(),
+        clampedEnd.getUTCMonth(),
+        clampedEnd.getUTCDate(),
+      ),
     );
-    while (cursor <= endDay && cursor < monthEnd) {
-      const iso = cursor.toISOString().slice(0, 10);
-      const room = (byRoomDay[b.roomId] ??= {});
-      const dayList = (room[iso] ??= []);
-      dayList.push({ booking: b, guestName });
-      cursor = new Date(cursor.getTime() + 86_400_000);
-    }
+    const colStart =
+      Math.round((startDay.getTime() - monthStart.getTime()) / 86_400_000) + 1;
+    let colSpan = Math.round((endDay.getTime() - startDay.getTime()) / 86_400_000);
+    // a one-day occupancy (e.g. hourly booking that starts and ends same day)
+    // still gets one column.
+    if (colSpan < 1) colSpan = 1;
+    // Don't run past the visible month.
+    if (colStart + colSpan - 1 > daysInMonth) colSpan = daysInMonth - colStart + 1;
+    return { colStart, colSpan };
+  }
+
+  for (const b of input.bookings) {
+    if (b.status === "cancelled" || b.status === "held") continue;
+    const cols = colsFor(b.checkInAt, b.checkOutAt);
+    if (!cols) continue;
+    const guest = input.guests.get(b.guestId);
+    const guestName = guest ? guest.fullName : "—";
+    (barsByRoom[b.roomId] ??= []).push({
+      booking: b,
+      guestName,
+      colStart: cols.colStart,
+      colSpan: cols.colSpan,
+    });
+  }
+  for (const list of Object.values(barsByRoom)) {
+    list.sort((a, b) => a.colStart - b.colStart);
   }
 
   for (const m of input.maintenance) {
-    const start = m.startsAt < monthStart ? monthStart : m.startsAt;
-    const end = m.endsAt > monthEnd ? monthEnd : m.endsAt;
-    if (start >= monthEnd || end <= monthStart) continue;
-    let cursor = new Date(
-      Date.UTC(
-        start.getUTCFullYear(),
-        start.getUTCMonth(),
-        start.getUTCDate(),
-      ),
-    );
-    const endDay = new Date(
-      Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()),
-    );
-    while (cursor <= endDay && cursor < monthEnd) {
-      const iso = cursor.toISOString().slice(0, 10);
-      const room = (maintenanceByRoomDay[m.roomId] ??= {});
-      const dayList = (room[iso] ??= []);
-      dayList.push(m);
-      cursor = new Date(cursor.getTime() + 86_400_000);
-    }
+    const cols = colsFor(m.startsAt, m.endsAt);
+    if (!cols) continue;
+    (maintBarsByRoom[m.roomId] ??= []).push({
+      block: m,
+      colStart: cols.colStart,
+      colSpan: cols.colSpan,
+    });
   }
 
   function buildQuery(monthIso: string): string {
@@ -181,8 +196,8 @@ function buildCalendar(input: {
 
   return {
     days,
-    byRoomDay,
-    maintenanceByRoomDay,
+    barsByRoom,
+    maintBarsByRoom,
     label,
     prevQuery,
     nextQuery,
@@ -313,38 +328,75 @@ export function mountAdminRoutes(
     }
     const guest = repo.guests.get(booking.guestId);
     const room = repo.rooms.get(booking.roomId);
+    const building = room ? repo.buildings.get(room.buildingId) : undefined;
+    const agent = booking.salesAgentId
+      ? repo.users.get(booking.salesAgentId)
+      : undefined;
     const proofs = Array.from(repo.paymentProofs.values()).filter(
       (p) => p.bookingId === booking.id,
     );
     const cleaningJob = Array.from(repo.cleaningJobs.values()).find(
       (j) => j.bookingId === booking.id,
     );
+    const cleaner =
+      cleaningJob && cleaningJob.assignedToUserId
+        ? repo.users.get(cleaningJob.assignedToUserId)
+        : undefined;
     const cancellation = Array.from(repo.cancellationRequests.values()).find(
       (c) => c.bookingId === booking.id,
     );
+    const minibarLines = repo.minibarUsage
+      .filter((u) => u.bookingId === booking.id)
+      .map((u) => ({ ...u, item: repo.minibarItems.get(u.minibarItemId) }));
+    const ledgerEntries = Array.from(repo.commissionLedger.values()).filter(
+      (e) => e.bookingId === booking.id,
+    );
+    const discount = booking.discountIdApplied
+      ? repo.discounts.find((d) => d.id === booking.discountIdApplied)
+      : undefined;
     res.render("admin/booking", {
       title: `Booking ${booking.bookingNumber}`,
       booking,
       guest,
       room,
+      building,
+      agent,
+      cleaner,
       proofs,
       cleaningJob,
       cancellation,
+      minibarLines,
+      ledgerEntries,
+      discount,
       cleaners: Array.from(repo.cleaningCrewProfiles.values()).map((p) => ({
         ...p,
         user: repo.users.get(p.userId),
       })),
-      flash: req.session.userId ? null : null,
     });
   });
 
   const editSchema = z.object({
-    checkInAt: z.string().min(1),
-    checkOutAt: z.string().min(1),
+    checkInAt: z.string().optional(),
+    checkInDate: z.string().optional(),
+    checkInTime: z.string().optional(),
+    checkOutAt: z.string().optional(),
+    checkOutDate: z.string().optional(),
+    checkOutTime: z.string().optional(),
+    bookingType: z.enum(["hourly", "day", "multi_day"]).optional(),
     notes: z.string().optional(),
   });
 
-  router.post("/bookings/:id/edit", (req, res) => {
+  function composeAdminDateTime(
+    direct?: string,
+    date?: string,
+    time?: string,
+  ): string | undefined {
+    if (direct && direct.length > 0) return direct;
+    if (date && time) return `${date}T${time}`;
+    return undefined;
+  }
+
+  router.post("/bookings/:id/edit", async (req, res) => {
     const booking = repo.bookings.get(req.params.id);
     if (!booking) {
       res.status(404).render("error", { title: "Not found", message: "" });
@@ -363,14 +415,35 @@ export function mountAdminRoutes(
       res.status(404).render("error", { title: "Room missing", message: "" });
       return;
     }
+    const inRaw = composeAdminDateTime(
+      parsed.data.checkInAt,
+      parsed.data.checkInDate,
+      parsed.data.checkInTime,
+    );
+    const outRaw = composeAdminDateTime(
+      parsed.data.checkOutAt,
+      parsed.data.checkOutDate,
+      parsed.data.checkOutTime,
+    );
+    if (!inRaw || !outRaw) {
+      res
+        .status(400)
+        .render("error", { title: "Invalid dates", message: "" });
+      return;
+    }
     try {
       const before = snapshotBooking(booking);
+      const reqIn = parseVietnamLocal(inRaw);
+      const reqOut = parseVietnamLocal(outRaw);
+      const { detectBookingType } = await import("../../services/pricing.js");
+      const newType = parsed.data.bookingType ?? detectBookingType(reqIn, reqOut);
+      booking.bookingType = newType;
       editBookingTimes({
         booking,
         room,
         rates: repo.rates,
-        requestedCheckIn: parseVietnamLocal(parsed.data.checkInAt),
-        requestedCheckOut: parseVietnamLocal(parsed.data.checkOutAt),
+        requestedCheckIn: reqIn,
+        requestedCheckOut: reqOut,
       });
       booking.notes = parsed.data.notes ?? booking.notes;
       audit(repo, req, {
@@ -938,68 +1011,161 @@ export function mountAdminRoutes(
     description: z.string().optional(),
     features: z.string().optional(),
     photoUrls: z.string().optional(),
+    videoUrls: z.string().optional(),
     isActive: z.string().optional(),
   });
 
-  router.post("/properties/rooms", (req, res) => {
-    const parsed = roomSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).render("error", { title: "Invalid room", message: "" });
-      return;
-    }
-    const id = nextId("room");
-    const room = {
-      id,
-      buildingId: parsed.data.buildingId,
-      name: parsed.data.name,
-      roomNumber: parsed.data.roomNumber || undefined,
-      maxGuests: parsed.data.maxGuests,
-      baseDayRateVnd: Math.round(parsed.data.baseDayRateK * 1000),
-      baseHourlyRateVnd: Math.round(parsed.data.baseHourlyRateK * 1000),
-      isActive: parsed.data.isActive !== "0",
-      description: parsed.data.description || undefined,
-      features: parseLines(parsed.data.features),
-      photoUrls: parseLines(parsed.data.photoUrls),
-      syncStatus: "not_synced" as const,
-    };
-    repo.rooms.set(id, room);
-    audit(repo, req, {
-      action: "room.create",
-      entityType: "room",
-      entityId: id,
-      after: room as Record<string, unknown>,
-    });
-    res.redirect("/admin/properties");
-  });
+  router.post(
+    "/properties/rooms",
+    screenshotUpload.array("photoFiles", 12),
+    (req, res) => {
+      const parsed = roomSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res
+          .status(400)
+          .render("error", { title: "Invalid room", message: "" });
+        return;
+      }
+      const uploadedPhotoUrls = ((req.files as Express.Multer.File[]) || []).map(
+        (f) => `/uploads/${path.basename(f.path)}`,
+      );
+      const id = nextId("room");
+      const room = {
+        id,
+        buildingId: parsed.data.buildingId,
+        name: parsed.data.name,
+        roomNumber: parsed.data.roomNumber || undefined,
+        maxGuests: parsed.data.maxGuests,
+        baseDayRateVnd: Math.round(parsed.data.baseDayRateK * 1000),
+        baseHourlyRateVnd: Math.round(parsed.data.baseHourlyRateK * 1000),
+        isActive: parsed.data.isActive !== "0",
+        description: parsed.data.description || undefined,
+        features: parseLines(parsed.data.features),
+        photoUrls: [...parseLines(parsed.data.photoUrls), ...uploadedPhotoUrls],
+        videoUrls: parseLines(parsed.data.videoUrls),
+        syncStatus: "not_synced" as const,
+      };
+      repo.rooms.set(id, room);
+      audit(repo, req, {
+        action: "room.create",
+        entityType: "room",
+        entityId: id,
+        after: room as Record<string, unknown>,
+      });
+      res.redirect("/admin/properties");
+    },
+  );
 
-  router.post("/properties/rooms/:id", (req, res) => {
+  router.post(
+    "/properties/rooms/:id",
+    screenshotUpload.array("photoFiles", 12),
+    (req, res) => {
+      const room = repo.rooms.get(req.params.id as string);
+      if (!room) {
+        res.status(404).render("error", { title: "Not found", message: "" });
+        return;
+      }
+      const parsed = roomSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).render("error", { title: "Invalid room", message: "" });
+        return;
+      }
+      const uploadedPhotoUrls = ((req.files as Express.Multer.File[]) || []).map(
+        (f) => `/uploads/${path.basename(f.path)}`,
+      );
+      const before = { ...room };
+      room.buildingId = parsed.data.buildingId;
+      room.name = parsed.data.name;
+      room.roomNumber = parsed.data.roomNumber || undefined;
+      room.maxGuests = parsed.data.maxGuests;
+      room.baseDayRateVnd = Math.round(parsed.data.baseDayRateK * 1000);
+      room.baseHourlyRateVnd = Math.round(parsed.data.baseHourlyRateK * 1000);
+      room.isActive = parsed.data.isActive !== "0";
+      room.description = parsed.data.description || undefined;
+      room.features = parseLines(parsed.data.features);
+      room.photoUrls = [
+        ...parseLines(parsed.data.photoUrls),
+        ...uploadedPhotoUrls,
+      ];
+      room.videoUrls = parseLines(parsed.data.videoUrls);
+      audit(repo, req, {
+        action: "room.edit",
+        entityType: "room",
+        entityId: room.id,
+        before: before as unknown as Record<string, unknown>,
+        after: { ...room } as unknown as Record<string, unknown>,
+      });
+      res.redirect("/admin/properties");
+    },
+  );
+
+  router.post("/properties/rooms/:id/photos/remove", (req, res) => {
     const room = repo.rooms.get(req.params.id as string);
     if (!room) {
       res.status(404).render("error", { title: "Not found", message: "" });
       return;
     }
-    const parsed = roomSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).render("error", { title: "Invalid room", message: "" });
-      return;
+    const url = String(req.body.url ?? "");
+    if (room.photoUrls) {
+      room.photoUrls = room.photoUrls.filter((u) => u !== url);
     }
-    const before = { ...room };
-    room.buildingId = parsed.data.buildingId;
-    room.name = parsed.data.name;
-    room.roomNumber = parsed.data.roomNumber || undefined;
-    room.maxGuests = parsed.data.maxGuests;
-    room.baseDayRateVnd = Math.round(parsed.data.baseDayRateK * 1000);
-    room.baseHourlyRateVnd = Math.round(parsed.data.baseHourlyRateK * 1000);
-    room.isActive = parsed.data.isActive !== "0";
-    room.description = parsed.data.description || undefined;
-    room.features = parseLines(parsed.data.features);
-    room.photoUrls = parseLines(parsed.data.photoUrls);
     audit(repo, req, {
-      action: "room.edit",
+      action: "room.photo_remove",
       entityType: "room",
       entityId: room.id,
-      before: before as unknown as Record<string, unknown>,
-      after: { ...room } as unknown as Record<string, unknown>,
+      after: { url },
+    });
+    res.redirect("/admin/properties");
+  });
+
+  router.post("/properties/rooms/:id/delete", (req, res) => {
+    const room = repo.rooms.get(req.params.id as string);
+    if (!room) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const refs = Array.from(repo.bookings.values()).filter(
+      (b) => b.roomId === room.id,
+    ).length;
+    if (refs > 0) {
+      res.status(400).render("error", {
+        title: "Cannot delete room",
+        message: `${refs} booking(s) reference this room. Deactivate the room instead so existing history stays intact.`,
+      });
+      return;
+    }
+    repo.rooms.delete(room.id);
+    audit(repo, req, {
+      action: "room.delete",
+      entityType: "room",
+      entityId: room.id,
+      before: room as unknown as Record<string, unknown>,
+    });
+    res.redirect("/admin/properties");
+  });
+
+  router.post("/properties/buildings/:id/delete", (req, res) => {
+    const b = repo.buildings.get(req.params.id as string);
+    if (!b) {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const roomRefs = Array.from(repo.rooms.values()).filter(
+      (r) => r.buildingId === b.id,
+    ).length;
+    if (roomRefs > 0) {
+      res.status(400).render("error", {
+        title: "Cannot delete building",
+        message: `${roomRefs} room(s) belong to this building. Move or delete them first.`,
+      });
+      return;
+    }
+    repo.buildings.delete(b.id);
+    audit(repo, req, {
+      action: "building.delete",
+      entityType: "building",
+      entityId: b.id,
+      before: b as unknown as Record<string, unknown>,
     });
     res.redirect("/admin/properties");
   });
@@ -1225,6 +1391,54 @@ export function mountAdminRoutes(
       });
       return;
     }
+    res.redirect("/admin/agents");
+  });
+
+  function userReferenceCount(userId: string): {
+    bookings: number;
+    cleaningJobs: number;
+    payments: number;
+  } {
+    return {
+      bookings: Array.from(repo.bookings.values()).filter(
+        (b) => b.salesAgentId === userId,
+      ).length,
+      cleaningJobs: Array.from(repo.cleaningJobs.values()).filter(
+        (j) => j.assignedToUserId === userId,
+      ).length,
+      payments:
+        repo.agentPayments.filter((p) => p.salesAgentId === userId).length +
+        repo.cleanerPayments.filter((p) => p.cleanerUserId === userId).length,
+    };
+  }
+
+  router.post("/agents/:id/delete", (req, res) => {
+    const u = repo.users.get(req.params.id as string);
+    if (!u || u.role !== "sales_agent") {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const refs = userReferenceCount(u.id);
+    const total = refs.bookings + refs.cleaningJobs + refs.payments;
+    if (total > 0) {
+      res.status(400).render("error", {
+        title: "Cannot delete agent",
+        message: `Agent is referenced by ${refs.bookings} booking(s), ${refs.payments} payment(s). Deactivate them instead so audit history stays intact.`,
+      });
+      return;
+    }
+    repo.users.delete(u.id);
+    // Also drop their commission rules and agent-specific discounts.
+    repo.commissionRules = repo.commissionRules.filter(
+      (r) => r.salesAgentId !== u.id,
+    );
+    repo.discounts = repo.discounts.filter((d) => d.salesAgentId !== u.id);
+    audit(repo, req, {
+      action: "agent.delete",
+      entityType: "user",
+      entityId: u.id,
+      before: { fullName: u.fullName, email: u.email },
+    });
     res.redirect("/admin/agents");
   });
 
@@ -1548,6 +1762,35 @@ export function mountAdminRoutes(
       });
       return;
     }
+    res.redirect("/admin/cleaners");
+  });
+
+  router.post("/cleaners/:id/delete", (req, res) => {
+    const u = repo.users.get(req.params.id as string);
+    if (!u || u.role !== "cleaning_crew") {
+      res.status(404).render("error", { title: "Not found", message: "" });
+      return;
+    }
+    const refs = userReferenceCount(u.id);
+    const total = refs.bookings + refs.cleaningJobs + refs.payments;
+    if (total > 0) {
+      res.status(400).render("error", {
+        title: "Cannot delete cleaner",
+        message: `Cleaner is assigned to ${refs.cleaningJobs} job(s) and has ${refs.payments} payment(s). Deactivate instead.`,
+      });
+      return;
+    }
+    repo.users.delete(u.id);
+    repo.cleaningCrewProfiles.delete(u.id);
+    repo.cleaningAvailability = repo.cleaningAvailability.filter(
+      (a) => a.cleaningCrewUserId !== u.id,
+    );
+    audit(repo, req, {
+      action: "cleaner.delete",
+      entityType: "user",
+      entityId: u.id,
+      before: { fullName: u.fullName, email: u.email },
+    });
     res.redirect("/admin/cleaners");
   });
 
