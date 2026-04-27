@@ -5,6 +5,7 @@ import type {
   Booking,
   BookingHold,
   Building,
+  CancellationFeeTier,
   CancellationRequest,
   CleanerPayrollPayment,
   CleaningAvailability,
@@ -54,9 +55,15 @@ export interface Repository {
   maintenanceBlocks: MaintenanceBlock[];
   agentPayments: AgentCommissionPayment[];
   cleanerPayments: CleanerPayrollPayment[];
+  cancellationPolicy: CancellationFeeTier[];
 
   bookingNumberCounter: { value: number };
 }
+
+export const DEFAULT_CANCELLATION_POLICY: CancellationFeeTier[] = [
+  { withinHoursOfCheckIn: 24, feePercent: 50 },
+  { withinHoursOfCheckIn: 72, feePercent: 30 },
+];
 
 export function createRepository(): Repository {
   return {
@@ -86,6 +93,7 @@ export function createRepository(): Repository {
     maintenanceBlocks: [],
     agentPayments: [],
     cleanerPayments: [],
+    cancellationPolicy: DEFAULT_CANCELLATION_POLICY.map((t) => ({ ...t })),
     bookingNumberCounter: { value: 0 },
   };
 }

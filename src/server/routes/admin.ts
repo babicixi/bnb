@@ -793,6 +793,7 @@ export function mountAdminRoutes(
         isActive: true,
       },
       now: new Date(),
+      tiers: repo.cancellationPolicy,
     });
     audit(repo, req, {
       action: "booking.cancel",
@@ -2738,6 +2739,67 @@ export function mountAdminRoutes(
       after: { status: task.status },
     });
     res.redirect("/admin/tasks");
+  });
+
+  // ---------- Policies (cancellation fees, etc.) ----------
+  router.get("/policies", (_req, res) => {
+    res.render("admin/policies", {
+      title: "Policies",
+      policy: repo.cancellationPolicy,
+    });
+  });
+
+  const policySchema = z.object({
+    withinHoursOfCheckIn: z.array(z.string()).default([]),
+    feePercent: z.array(z.string()).default([]),
+  });
+
+  router.post("/policies/cancellation", (req, res) => {
+    // Express body-parser delivers repeated form fields as arrays; ensure
+    // both inputs are arrays even when the user kept only one tier.
+    const body = req.body as Record<string, unknown>;
+    const toArr = (v: unknown): string[] =>
+      Array.isArray(v) ? v.map(String) : v == null ? [] : [String(v)];
+    const parsed = policySchema.safeParse({
+      withinHoursOfCheckIn: toArr(body.withinHoursOfCheckIn),
+      feePercent: toArr(body.feePercent),
+    });
+    if (!parsed.success) {
+      res.status(400).render("error", { title: "Invalid policy", message: "" });
+      return;
+    }
+    const tiers: import("../../domain/types.js").CancellationFeeTier[] = [];
+    const len = Math.min(
+      parsed.data.withinHoursOfCheckIn.length,
+      parsed.data.feePercent.length,
+    );
+    for (let i = 0; i < len; i += 1) {
+      const h = Number(parsed.data.withinHoursOfCheckIn[i]);
+      const p = Number(parsed.data.feePercent[i]);
+      if (
+        Number.isFinite(h) &&
+        h >= 0 &&
+        Number.isFinite(p) &&
+        p >= 0 &&
+        p <= 100
+      ) {
+        tiers.push({
+          withinHoursOfCheckIn: h,
+          feePercent: p,
+        });
+      }
+    }
+    tiers.sort((a, b) => a.withinHoursOfCheckIn - b.withinHoursOfCheckIn);
+    const before = repo.cancellationPolicy.slice();
+    repo.cancellationPolicy = tiers;
+    audit(repo, req, {
+      action: "policy.cancellation_update",
+      entityType: "policy",
+      entityId: "cancellation",
+      before: { tiers: before },
+      after: { tiers },
+    });
+    res.redirect("/admin/policies");
   });
 
   // ---------- Maintenance blocks ----------

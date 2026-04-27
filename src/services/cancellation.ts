@@ -1,28 +1,42 @@
 import type {
   Booking,
+  CancellationFeeTier,
   CancellationRequest,
   Id,
   RefundRecord,
   User,
 } from "../domain/types.js";
 
+const DEFAULT_TIERS: CancellationFeeTier[] = [
+  { withinHoursOfCheckIn: 24, feePercent: 50 },
+  { withinHoursOfCheckIn: 72, feePercent: 30 },
+];
+
+/**
+ * First tier whose `withinHoursOfCheckIn` ≥ time-until-check-in wins. Tiers
+ * are sorted by threshold ascending so the tightest tier is checked first.
+ * If no tier matches, the fee is 0.
+ */
 export function calculateCancellationFee(input: {
   now: Date;
   checkInAt: Date;
   finalRoomChargeVnd: number;
+  tiers?: CancellationFeeTier[];
 }): number {
   const hoursUntilCheckIn =
     (input.checkInAt.getTime() - input.now.getTime()) / 3_600_000;
-
-  if (hoursUntilCheckIn > 72) {
-    return 0;
+  const tiers = (input.tiers && input.tiers.length > 0
+    ? input.tiers
+    : DEFAULT_TIERS
+  )
+    .slice()
+    .sort((a, b) => a.withinHoursOfCheckIn - b.withinHoursOfCheckIn);
+  for (const tier of tiers) {
+    if (hoursUntilCheckIn <= tier.withinHoursOfCheckIn) {
+      return Math.round((input.finalRoomChargeVnd * tier.feePercent) / 100);
+    }
   }
-
-  if (hoursUntilCheckIn > 24) {
-    return Math.round(input.finalRoomChargeVnd * 0.3);
-  }
-
-  return Math.round(input.finalRoomChargeVnd * 0.5);
+  return 0;
 }
 
 export function calculateRefund(input: {
@@ -85,6 +99,7 @@ export function approveCancellation(input: {
   request: CancellationRequest;
   approvedBy: User;
   now: Date;
+  tiers?: CancellationFeeTier[];
 }): CancellationRequest {
   if (
     input.approvedBy.role !== "admin" &&
@@ -97,6 +112,7 @@ export function approveCancellation(input: {
     now: input.now,
     checkInAt: input.booking.checkInAt,
     finalRoomChargeVnd: input.booking.finalRoomChargeVnd,
+    tiers: input.tiers,
   });
 
   input.request.status = "approved";

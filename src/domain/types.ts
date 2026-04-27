@@ -331,6 +331,24 @@ export interface MaintenanceBlock {
   createdAt: Date;
 }
 
+/**
+ * Cancellation fee policy. Tiers are evaluated in order; the first one whose
+ * `withinHoursOfCheckIn` is greater than or equal to the time remaining
+ * until check-in wins. If no tier matches, the fee is 0.
+ *
+ * Default (matches the original spec):
+ *   [{ withinHoursOfCheckIn: 24, feePercent: 50 },
+ *    { withinHoursOfCheckIn: 72, feePercent: 30 }]
+ *
+ * → ≤ 24h before check-in → 50%
+ * → ≤ 72h (but > 24h) → 30%
+ * → otherwise → 0%
+ */
+export interface CancellationFeeTier {
+  withinHoursOfCheckIn: number;
+  feePercent: number;
+}
+
 export interface NotificationLogEntry {
   id: Id;
   event: string;

@@ -1,0 +1,85 @@
+<%- include('../_header') %>
+<%- include('_nav') %>
+<h1>Policies</h1>
+
+<div class="card">
+  <h2>Cancellation fee tiers</h2>
+  <p class="muted-small">
+    When a guest cancels, we evaluate tiers from the tightest threshold upward.
+    The first tier whose <strong>"within X hours"</strong> is greater than or equal
+    to the time remaining until check-in determines the fee. If no tier matches
+    (i.e. cancellation is earlier than every threshold), the fee is 0%.
+  </p>
+  <p class="muted-small">
+    Defaults: <code>24h → 50%</code>, <code>72h → 30%</code>. Anything earlier
+    than 72h is free.
+  </p>
+
+  <form method="post" action="/admin/policies/cancellation">
+    <table id="tiers" style="max-width: 600px;">
+      <thead>
+        <tr>
+          <th>Within hours of check-in</th>
+          <th>Fee (% of room charge)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% (policy && policy.length ? policy : []).forEach(function(t){ %>
+          <tr>
+            <td>
+              <input type="number" name="withinHoursOfCheckIn" value="<%= t.withinHoursOfCheckIn %>" min="0" step="1" required style="max-width:120px" />
+              <span class="muted-small">h</span>
+            </td>
+            <td>
+              <input type="number" name="feePercent" value="<%= t.feePercent %>" min="0" max="100" step="0.5" required style="max-width:100px" />
+              <span class="muted-small">%</span>
+            </td>
+            <td><button type="button" class="secondary" onclick="this.closest('tr').remove()">Remove</button></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <p>
+      <button type="button" class="secondary" id="add-tier">+ Add tier</button>
+      <button type="submit">Save policy</button>
+    </p>
+  </form>
+
+  <h3 style="margin-top: 1.5rem;">Examples (using your saved policy)</h3>
+  <p class="muted-small">For a booking with 1,000,000 ₫ final room charge:</p>
+  <table style="max-width: 600px;">
+    <thead><tr><th>Cancelled with this much notice</th><th>Fee</th></tr></thead>
+    <tbody>
+      <%
+        const examples = [{label: '7 days', hours: 168}, {label: '4 days', hours: 96}, {label: '2 days', hours: 48}, {label: '12 hours', hours: 12}, {label: '1 hour', hours: 1}];
+        const tiers = (policy || []).slice().sort((a, b) => a.withinHoursOfCheckIn - b.withinHoursOfCheckIn);
+        examples.forEach(function(ex){
+          let pct = 0;
+          for (const t of tiers) {
+            if (ex.hours <= t.withinHoursOfCheckIn) { pct = t.feePercent; break; }
+          }
+      %>
+        <tr>
+          <td><%= ex.label %> (<%= ex.hours %>h)</td>
+          <td><%= pct %>% → <%= formatVnd(Math.round(1_000_000 * pct / 100)) %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+(function(){
+  document.getElementById('add-tier').addEventListener('click', function(){
+    var tbody = document.querySelector('#tiers tbody');
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="number" name="withinHoursOfCheckIn" value="24" min="0" step="1" required style="max-width:120px" /> <span class="muted-small">h</span></td>' +
+      '<td><input type="number" name="feePercent" value="0" min="0" max="100" step="0.5" required style="max-width:100px" /> <span class="muted-small">%</span></td>' +
+      '<td><button type="button" class="secondary" onclick="this.closest(\'tr\').remove()">Remove</button></td>';
+    tbody.appendChild(tr);
+  });
+})();
+</script>
+<%- include('../_footer') %>

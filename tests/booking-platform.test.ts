@@ -636,6 +636,41 @@ describe("cancellation and refunds", () => {
     ).toBe(300_000);
   });
 
+  it("cancellation fee uses custom tiers when provided", () => {
+    // Custom policy: within 6h → 100%, within 48h → 25%, otherwise 0%
+    const tiers = [
+      { withinHoursOfCheckIn: 6, feePercent: 100 },
+      { withinHoursOfCheckIn: 48, feePercent: 25 },
+    ];
+    // 4 hours before → first tier (100%)
+    expect(
+      calculateCancellationFee({
+        now: d("2026-05-01T11:00:00+07:00"),
+        checkInAt: d("2026-05-01T15:00:00+07:00"),
+        finalRoomChargeVnd: 1_000_000,
+        tiers,
+      }),
+    ).toBe(1_000_000);
+    // 30 hours before → second tier (25%)
+    expect(
+      calculateCancellationFee({
+        now: d("2026-04-30T09:00:00+07:00"),
+        checkInAt: d("2026-05-01T15:00:00+07:00"),
+        finalRoomChargeVnd: 1_000_000,
+        tiers,
+      }),
+    ).toBe(250_000);
+    // 5 days before → no tier matches → 0
+    expect(
+      calculateCancellationFee({
+        now: d("2026-04-26T15:00:00+07:00"),
+        checkInAt: d("2026-05-01T15:00:00+07:00"),
+        finalRoomChargeVnd: 1_000_000,
+        tiers,
+      }),
+    ).toBe(0);
+  });
+
   it("cancellation fee is 50% within 24 hours", () => {
     expect(
       calculateCancellationFee({
