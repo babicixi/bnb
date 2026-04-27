@@ -41,18 +41,17 @@
         <% }) %>
 
         <%
-          // Compute left% and width% for a bar. For partial-day (hourly)
-          // bars, divide the bar's day into 24h and use startHour/endHour.
-          // For multi-day, span full day cells.
+          // Position every bar precisely by Vietnam-local clock:
+          //   left   = (colStart - 1) + startHour/24       (days from week start)
+          //   width  = (colSpan - 1) + (endHour - startHour)/24
+          // This works for partial-day, day, and multi-day uniformly:
+          //   • hourly 10:00-12:00 → starts at .417 of its cell, width .083 cells
+          //   • day 15:00→11:00 next day → starts at .625 of day 1, ends at .458 of day 2
+          //   • multi-day → starts at check-in hour, ends at check-out hour two cells later
           function barPos(bar) {
-            var leftDays, widthDays;
-            if (bar.isPartialDay) {
-              leftDays = (bar.colStart - 1) + bar.startHour / 24;
-              widthDays = (bar.endHour - bar.startHour) / 24;
-            } else {
-              leftDays = bar.colStart - 1;
-              widthDays = bar.colSpan;
-            }
+            var leftDays = (bar.colStart - 1) + bar.startHour / 24;
+            var widthDays =
+              (bar.colSpan - 1) + (bar.endHour - bar.startHour) / 24;
             return {
               left: (leftDays / dayCount) * 100,
               width: (widthDays / dayCount) * 100,
