@@ -1181,13 +1181,19 @@ export function mountAdminRoutes(
       req.query.roomId ?? Array.from(repo.rooms.keys())[0] ?? "",
     );
     const room = repo.rooms.get(roomId);
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
     const rates = repo.rates
-      .filter((r) => r.roomId === roomId && r.rateDate >= today)
+      .filter((r) => r.roomId === roomId && r.rateDate >= monthStart)
       .sort((a, b) => a.rateDate.localeCompare(b.rateDate));
+    const buildings = Array.from(repo.buildings.values());
+    const allRooms = Array.from(repo.rooms.values()).sort((a, b) =>
+      (a.roomNumber || a.name).localeCompare(b.roomNumber || b.name),
+    );
     res.render("admin/pricing", {
       title: "Pricing",
-      rooms: Array.from(repo.rooms.values()),
+      rooms: allRooms,
+      buildings,
       room,
       rates,
       flash: req.query.flash || null,
@@ -1383,6 +1389,145 @@ export function mountAdminRoutes(
     });
     res.redirect(
       `/admin/pricing?roomId=${parsed.data.roomId}&flash=bulk-${count}`,
+    );
+  });
+
+  // Apply a percentage adjustment (signed: -10 = 10% off, +15 = 15% up) to a
+  // date range across one or more rooms. The adjustment is computed against
+  // each room's own defaults (weekday/weekend day rate, per-hour, tiers).
+  const bulkPercentSchema = z.object({
+    roomIds: z.union([z.string(), z.array(z.string())]),
+    contextRoomId: z.string().optional(),
+    fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    percent: z.coerce.number(),
+    markSpecial: z.string().optional(),
+    note: z.string().optional(),
+  });
+
+  router.post("/pricing/bulk-percent", (req, res) => {
+    const parsed = bulkPercentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).render("error", {
+        title: "Invalid percent adjustment",
+        message: "",
+      });
+      return;
+    }
+    const start = new Date(`${parsed.data.fromDate}T00:00:00Z`);
+    const end = new Date(`${parsed.data.toDate}T00:00:00Z`);
+    if (
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime()) ||
+      end < start
+    ) {
+      res.status(400).render("error", { title: "Bad date range", message: "" });
+      return;
+    }
+    const roomIds = Array.isArray(parsed.data.roomIds)
+      ? parsed.data.roomIds
+      : [parsed.data.roomIds];
+    const factor = 1 + parsed.data.percent / 100;
+    const markSpecial = parsed.data.markSpecial === "1";
+    const note = parsed.data.note?.trim() || undefined;
+
+    const adj = (vnd: number | undefined): number | undefined =>
+      vnd === undefined ? undefined : Math.round((vnd * factor) / 1000) * 1000;
+
+    let count = 0;
+    for (const rid of roomIds) {
+      const r = repo.rooms.get(rid);
+      if (!r) continue;
+      let cursor = new Date(start);
+      while (cursor <= end) {
+        const dateKey = cursor.toISOString().slice(0, 10);
+        const dow = cursor.getUTCDay();
+        const isWeekend = dow === 0 || dow === 6;
+        const baseDay = isWeekend
+          ? (r.baseWeekendRateVnd ?? r.baseDayRateVnd)
+          : r.baseDayRateVnd;
+        const newDay = adj(baseDay) ?? baseDay;
+        const newHourly = adj(r.baseHourlyRateVnd) ?? r.baseHourlyRateVnd;
+        const baseTiers = r.baseHourlyTiers;
+        const newTiers = baseTiers
+          ? {
+              rate2hVnd: adj(baseTiers.rate2hVnd),
+              rate4hVnd: adj(baseTiers.rate4hVnd),
+              rate6hVnd: adj(baseTiers.rate6hVnd),
+              rate8hVnd: adj(baseTiers.rate8hVnd),
+              rate12hVnd: adj(baseTiers.rate12hVnd),
+            }
+          : undefined;
+        let existing = repo.rates.find(
+          (x) => x.roomId === rid && x.rateDate === dateKey,
+        );
+        if (!existing) {
+          existing = {
+            roomId: rid,
+            rateDate: dateKey,
+            dayRateVnd: newDay,
+            hourlyRateVnd: newHourly,
+          };
+          repo.rates.push(existing);
+        } else {
+          existing.dayRateVnd = newDay;
+          existing.hourlyRateVnd = newHourly;
+        }
+        if (newTiers) existing.hourlyTiers = newTiers;
+        if (markSpecial) existing.isSpecial = true;
+        if (note !== undefined) existing.note = note;
+        count += 1;
+        cursor = new Date(cursor.getTime() + 24 * 60 * 60_000);
+      }
+    }
+    audit(repo, req, {
+      action: "pricing.bulk_percent",
+      entityType: "room_daily_rate",
+      entityId: roomIds.join(","),
+      after: {
+        rooms: roomIds,
+        from: parsed.data.fromDate,
+        to: parsed.data.toDate,
+        percent: parsed.data.percent,
+        markSpecial,
+        note,
+        count,
+      },
+    });
+    const back = parsed.data.contextRoomId || roomIds[0];
+    res.redirect(
+      `/admin/pricing?roomId=${back}&flash=percent-${parsed.data.percent}-${count}`,
+    );
+  });
+
+  // Remove a list of overrides (selected via checkboxes in the table).
+  const bulkRemoveSchema = z.object({
+    roomId: z.string(),
+    dates: z.union([z.string(), z.array(z.string())]),
+  });
+
+  router.post("/pricing/bulk-remove", (req, res) => {
+    const parsed = bulkRemoveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.redirect("/admin/pricing");
+      return;
+    }
+    const dates = new Set(
+      Array.isArray(parsed.data.dates) ? parsed.data.dates : [parsed.data.dates],
+    );
+    const before = repo.rates.length;
+    repo.rates = repo.rates.filter(
+      (r) => !(r.roomId === parsed.data.roomId && dates.has(r.rateDate)),
+    );
+    const removed = before - repo.rates.length;
+    audit(repo, req, {
+      action: "pricing.bulk_remove",
+      entityType: "room_daily_rate",
+      entityId: parsed.data.roomId,
+      after: { dates: Array.from(dates), removed },
+    });
+    res.redirect(
+      `/admin/pricing?roomId=${parsed.data.roomId}&flash=removed-${removed}`,
     );
   });
 
@@ -2641,7 +2786,7 @@ export function mountAdminRoutes(
 
   const minibarItemSchema = z.object({
     name: z.string().min(1),
-    unitPriceVnd: z.coerce.number().int().nonnegative(),
+    unitPriceK: z.coerce.number().nonnegative(),
     isActive: z.string().optional(),
   });
 
@@ -2654,7 +2799,7 @@ export function mountAdminRoutes(
     const item = {
       id: nextId("minibar"),
       name: parsed.data.name,
-      unitPriceVnd: parsed.data.unitPriceVnd,
+      unitPriceVnd: Math.round(parsed.data.unitPriceK * 1000),
       isActive: parsed.data.isActive === "1",
     };
     repo.minibarItems.set(item.id, item);
@@ -2685,7 +2830,7 @@ export function mountAdminRoutes(
 
   const minibarEditSchema = z.object({
     name: z.string().min(1),
-    unitPriceVnd: z.coerce.number().int().nonnegative(),
+    unitPriceK: z.coerce.number().nonnegative(),
   });
 
   router.post("/minibar/:id/edit", (req, res) => {
@@ -2701,7 +2846,7 @@ export function mountAdminRoutes(
     }
     const before = { name: item.name, unitPriceVnd: item.unitPriceVnd };
     item.name = parsed.data.name;
-    item.unitPriceVnd = parsed.data.unitPriceVnd;
+    item.unitPriceVnd = Math.round(parsed.data.unitPriceK * 1000);
     audit(repo, req, {
       action: "minibar.edit",
       entityType: "minibar_item",

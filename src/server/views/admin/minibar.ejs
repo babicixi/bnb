@@ -1,8 +1,9 @@
 <%- include('../_header') %>
 <%- include('_nav') %>
 <h1>Minibar items</h1>
+<p class="muted-small">All prices in <strong>thousands of VND</strong>: type <code>15</code> for 15,000 ₫.</p>
 <table>
-  <thead><tr><th>Name</th><th>Price (₫)</th><th>Active</th><th>Actions</th></tr></thead>
+  <thead><tr><th>Name</th><th>Price (₫'000)</th><th>Active</th><th>Actions</th></tr></thead>
   <tbody>
     <% if (items.length === 0) { %><tr><td colspan="4" class="muted">No items.</td></tr><% } %>
     <% items.forEach(function(i){ %>
@@ -12,7 +13,7 @@
           <input form="m-<%= i.id %>" type="text" name="name" value="<%= i.name %>" required style="max-width:220px" />
         </td>
         <td>
-          <input form="m-<%= i.id %>" type="number" name="unitPriceVnd" value="<%= i.unitPriceVnd %>" min="0" step="500" style="max-width:120px" />
+          <input form="m-<%= i.id %>" type="number" name="unitPriceK" value="<%= i.unitPriceVnd / 1000 %>" min="0" step="1" style="max-width:100px" />
           <span class="muted-small"><%= formatVnd(i.unitPriceVnd) %></span>
         </td>
         <td><%= i.isActive ? 'Yes' : 'No' %></td>
@@ -31,7 +32,7 @@
   <h2>Add an item</h2>
   <form method="post" action="/admin/minibar">
     <label>Name</label><input name="name" required />
-    <label>Unit price (₫)</label><input type="number" name="unitPriceVnd" min="0" step="500" required />
+    <label>Unit price (₫'000)</label><input type="number" name="unitPriceK" min="0" step="1" required placeholder="15" />
     <p><label><input type="checkbox" name="isActive" value="1" checked /> Active</label></p>
     <p><button type="submit">Create</button></p>
   </form>

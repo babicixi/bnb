@@ -32,6 +32,45 @@
 
 <% if (room) { %>
 <div class="card">
+  <h2>Bulk percentage adjustment</h2>
+  <p class="muted-small">Apply a flat <strong>+/-%</strong> against each selected room's defaults across a date range. Use a positive number to mark up (e.g. <code>15</code> for +15% on Tet), a negative number for a discount (e.g. <code>-10</code>). Re-runs replace any existing overrides on those dates.</p>
+  <form method="post" action="/admin/pricing/bulk-percent">
+    <input type="hidden" name="contextRoomId" value="<%= room.id %>" />
+    <div class="grid cols-3">
+      <div><label>From date</label><input type="date" name="fromDate" required /></div>
+      <div><label>To date</label><input type="date" name="toDate" required /></div>
+      <div><label>Percent (signed, e.g. 15 or -10)</label><input type="number" name="percent" step="1" required placeholder="15" /></div>
+    </div>
+    <h4 style="margin: 1rem 0 0.25rem;">Apply to which rooms</h4>
+    <% buildings.forEach(function(b){
+         var bRooms = rooms.filter(function(rr){ return rr.buildingId === b.id; });
+         if (bRooms.length === 0) return;
+    %>
+      <p style="margin: 0.5rem 0 0.25rem;">
+        <strong><%= b.name %></strong>
+        <label class="muted-small" style="margin-left:0.5rem;">
+          <input type="checkbox" onchange="var c=this.checked; this.form.querySelectorAll('input[name=&quot;roomIds&quot;][data-building=&quot;<%= b.id %>&quot;]').forEach(function(cb){cb.checked=c;});" /> all in building
+        </label>
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.4rem 1rem;">
+        <% bRooms.forEach(function(rr){ %>
+          <label>
+            <input type="checkbox" name="roomIds" value="<%= rr.id %>" data-building="<%= b.id %>" <%= rr.id === room.id ? 'checked' : '' %> />
+            <%= rr.name %><% if (rr.roomNumber) { %> <span class="muted-small">· <%= rr.roomNumber %></span><% } %>
+          </label>
+        <% }) %>
+      </div>
+    <% }) %>
+    <p style="margin-top:0.75rem;">
+      <label><input type="checkbox" name="markSpecial" value="1" /> Mark every date as a <strong>special day</strong></label>
+    </p>
+    <label>Note (e.g. "Tet +15%", optional)</label>
+    <input type="text" name="note" />
+    <p><button type="submit">Apply percentage</button></p>
+  </form>
+</div>
+
+<div class="card">
   <h2>Add a special-pricing date / range</h2>
   <p class="muted-small">Apply across a date range. Mon–Fri inside the range get the weekday rate; Sat/Sun get the weekend rate (or weekday if blank). Leave any row blank to keep the room's default for that piece. Tier prices are flat package rates — they override the room defaults only for the dates in this range.</p>
   <form method="post" action="/admin/pricing/bulk">
@@ -39,17 +78,17 @@
     <div class="grid cols-2">
       <div><label>From date</label><input type="date" name="fromDate" required /></div>
       <div><label>To date</label><input type="date" name="toDate" required /></div>
-      <div><label>Weekday rate (₫'000)</label><input type="number" name="weekdayRateK" min="0" step="0.5" placeholder="leave blank to keep default" /></div>
-      <div><label>Weekend rate (₫'000)</label><input type="number" name="weekendRateK" min="0" step="0.5" placeholder="leave blank to keep default" /></div>
-      <div><label>Per-hour fallback (₫'000)</label><input type="number" name="hourlyRateK" min="0" step="0.5" placeholder="leave blank to keep default" /></div>
+      <div><label>Weekday rate (₫'000)</label><input type="number" name="weekdayRateK" min="0" step="25" placeholder="leave blank to keep default" /></div>
+      <div><label>Weekend rate (₫'000)</label><input type="number" name="weekendRateK" min="0" step="25" placeholder="leave blank to keep default" /></div>
+      <div><label>Per-hour fallback (₫'000)</label><input type="number" name="hourlyRateK" min="0" step="25" placeholder="leave blank to keep default" /></div>
     </div>
     <h4 style="margin: 1rem 0 0.25rem;">Hourly tier prices (₫'000)</h4>
     <div class="grid cols-3">
-      <div><label>2 h</label><input type="number" name="rate2hK" min="0" step="0.5" /></div>
-      <div><label>4 h</label><input type="number" name="rate4hK" min="0" step="0.5" /></div>
-      <div><label>6 h</label><input type="number" name="rate6hK" min="0" step="0.5" /></div>
-      <div><label>8 h</label><input type="number" name="rate8hK" min="0" step="0.5" /></div>
-      <div><label>12 h</label><input type="number" name="rate12hK" min="0" step="0.5" /></div>
+      <div><label>2 h</label><input type="number" name="rate2hK" min="0" step="25" /></div>
+      <div><label>4 h</label><input type="number" name="rate4hK" min="0" step="25" /></div>
+      <div><label>6 h</label><input type="number" name="rate6hK" min="0" step="25" /></div>
+      <div><label>8 h</label><input type="number" name="rate8hK" min="0" step="25" /></div>
+      <div><label>12 h</label><input type="number" name="rate12hK" min="0" step="25" /></div>
     </div>
     <p>
       <label><input type="checkbox" name="markSpecial" value="1" checked /> Mark every date in this range as a <strong>special day</strong> (e.g. holiday)</label>
@@ -65,9 +104,13 @@
   <% if (rates.length === 0) { %>
     <p class="muted">No overrides — every future date uses the room's default rates. Add holidays / special pricing above when needed.</p>
   <% } else { %>
+    <form id="bulk-overrides-form" method="post" action="/admin/pricing/bulk-remove" style="display:none" onsubmit="return confirm('Remove all selected overrides? Cannot be undone.')">
+      <input type="hidden" name="roomId" value="<%= room.id %>" />
+    </form>
     <table>
       <thead>
         <tr>
+          <th><input type="checkbox" onchange="var c=this.checked; document.querySelectorAll('input.override-row-cb').forEach(function(cb){cb.checked=c;});" title="Select all" /></th>
           <th>Date</th>
           <th>Day</th>
           <th>Day rate</th>
@@ -94,6 +137,7 @@
              }
         %>
           <tr class="<%= weekend ? 'weekend' : '' %> <%= r.isSpecial ? 'special' : '' %>">
+            <td><input class="override-row-cb" form="bulk-overrides-form" type="checkbox" name="dates" value="<%= r.rateDate %>" /></td>
             <td>
               <strong><%= r.rateDate %></strong>
               <% if (r.isSpecial) { %><br><span class="badge bad">special</span><% } %>
@@ -110,13 +154,13 @@
                   <input type="hidden" name="roomId" value="<%= room.id %>" />
                   <input type="hidden" name="rateDate" value="<%= r.rateDate %>" />
                   <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
-                    <label class="muted-small">Day</label><input type="number" name="dayRateK" value="<%= r.dayRateVnd / 1000 %>" min="0" step="0.5" style="max-width:100px" />
-                    <label class="muted-small">Hr</label><input type="number" name="hourlyRateK" value="<%= r.hourlyRateVnd / 1000 %>" min="0" step="0.5" style="max-width:100px" />
-                    <label class="muted-small">2h</label><input type="number" name="rate2hK" value="<%= t.rate2hVnd != null ? t.rate2hVnd / 1000 : '' %>" min="0" step="0.5" style="max-width:80px" />
-                    <label class="muted-small">4h</label><input type="number" name="rate4hK" value="<%= t.rate4hVnd != null ? t.rate4hVnd / 1000 : '' %>" min="0" step="0.5" style="max-width:80px" />
-                    <label class="muted-small">6h</label><input type="number" name="rate6hK" value="<%= t.rate6hVnd != null ? t.rate6hVnd / 1000 : '' %>" min="0" step="0.5" style="max-width:80px" />
-                    <label class="muted-small">8h</label><input type="number" name="rate8hK" value="<%= t.rate8hVnd != null ? t.rate8hVnd / 1000 : '' %>" min="0" step="0.5" style="max-width:80px" />
-                    <label class="muted-small">12h</label><input type="number" name="rate12hK" value="<%= t.rate12hVnd != null ? t.rate12hVnd / 1000 : '' %>" min="0" step="0.5" style="max-width:80px" />
+                    <label class="muted-small">Day</label><input type="number" name="dayRateK" value="<%= r.dayRateVnd / 1000 %>" min="0" step="25" style="max-width:100px" />
+                    <label class="muted-small">Hr</label><input type="number" name="hourlyRateK" value="<%= r.hourlyRateVnd / 1000 %>" min="0" step="25" style="max-width:100px" />
+                    <label class="muted-small">2h</label><input type="number" name="rate2hK" value="<%= t.rate2hVnd != null ? t.rate2hVnd / 1000 : '' %>" min="0" step="25" style="max-width:80px" />
+                    <label class="muted-small">4h</label><input type="number" name="rate4hK" value="<%= t.rate4hVnd != null ? t.rate4hVnd / 1000 : '' %>" min="0" step="25" style="max-width:80px" />
+                    <label class="muted-small">6h</label><input type="number" name="rate6hK" value="<%= t.rate6hVnd != null ? t.rate6hVnd / 1000 : '' %>" min="0" step="25" style="max-width:80px" />
+                    <label class="muted-small">8h</label><input type="number" name="rate8hK" value="<%= t.rate8hVnd != null ? t.rate8hVnd / 1000 : '' %>" min="0" step="25" style="max-width:80px" />
+                    <label class="muted-small">12h</label><input type="number" name="rate12hK" value="<%= t.rate12hVnd != null ? t.rate12hVnd / 1000 : '' %>" min="0" step="25" style="max-width:80px" />
                   </div>
                   <p>
                     <label><input type="checkbox" name="isSpecial" value="1" <%= r.isSpecial ? 'checked' : '' %> /> Special day</label>
@@ -138,10 +182,13 @@
         <% }) %>
       </tbody>
     </table>
-    <form method="post" action="/admin/pricing/clear-all" style="margin-top:0.75rem;" onsubmit="return confirm('Clear ALL overrides for <%= room.name %>? Pricing will fall back to room defaults for every date.')">
-      <input type="hidden" name="roomId" value="<%= room.id %>" />
-      <button type="submit" class="danger">Clear all overrides</button>
-    </form>
+    <p style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <button type="submit" form="bulk-overrides-form" class="danger">Remove selected</button>
+      <form method="post" action="/admin/pricing/clear-all" style="display:inline" onsubmit="return confirm('Clear ALL overrides for <%= room.name %>? Pricing will fall back to room defaults for every date.')">
+        <input type="hidden" name="roomId" value="<%= room.id %>" />
+        <button type="submit" class="danger">Clear all overrides</button>
+      </form>
+    </p>
   <% } %>
 </div>
 

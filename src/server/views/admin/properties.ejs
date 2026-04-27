@@ -79,15 +79,15 @@
           </div>
           <div>
             <label>Weekday day rate (₫'000)</label>
-            <input type="number" name="baseDayRateK" value="<%= r.baseDayRateVnd / 1000 %>" min="0" step="0.5" required />
+            <input type="number" name="baseDayRateK" value="<%= r.baseDayRateVnd / 1000 %>" min="0" step="25" required />
           </div>
           <div>
             <label>Weekend day rate (₫'000, optional)</label>
-            <input type="number" name="baseWeekendRateK" value="<%= r.baseWeekendRateVnd != null ? r.baseWeekendRateVnd / 1000 : '' %>" min="0" step="0.5" placeholder="defaults to weekday rate" />
+            <input type="number" name="baseWeekendRateK" value="<%= r.baseWeekendRateVnd != null ? r.baseWeekendRateVnd / 1000 : '' %>" min="0" step="25" placeholder="defaults to weekday rate" />
           </div>
           <div>
             <label>Per-hour fallback (₫'000)</label>
-            <input type="number" name="baseHourlyRateK" value="<%= r.baseHourlyRateVnd / 1000 %>" min="0" step="0.5" required />
+            <input type="number" name="baseHourlyRateK" value="<%= r.baseHourlyRateVnd / 1000 %>" min="0" step="25" required />
           </div>
           <div>
             <label>&nbsp;</label>
@@ -97,11 +97,11 @@
         <h4 style="margin: 1rem 0 0.25rem;">Hourly tier prices (₫'000)</h4>
         <p class="muted-small">Flat package prices. Smallest tier ≥ duration wins. Leave blank to use the per-hour fallback.</p>
         <div class="grid cols-3">
-          <div><label>2 h</label><input type="number" name="rate2hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate2hVnd != null ? r.baseHourlyTiers.rate2hVnd / 1000 : '' %>" min="0" step="0.5" /></div>
-          <div><label>4 h</label><input type="number" name="rate4hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate4hVnd != null ? r.baseHourlyTiers.rate4hVnd / 1000 : '' %>" min="0" step="0.5" /></div>
-          <div><label>6 h</label><input type="number" name="rate6hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate6hVnd != null ? r.baseHourlyTiers.rate6hVnd / 1000 : '' %>" min="0" step="0.5" /></div>
-          <div><label>8 h</label><input type="number" name="rate8hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate8hVnd != null ? r.baseHourlyTiers.rate8hVnd / 1000 : '' %>" min="0" step="0.5" /></div>
-          <div><label>12 h</label><input type="number" name="rate12hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate12hVnd != null ? r.baseHourlyTiers.rate12hVnd / 1000 : '' %>" min="0" step="0.5" /></div>
+          <div><label>2 h</label><input type="number" name="rate2hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate2hVnd != null ? r.baseHourlyTiers.rate2hVnd / 1000 : '' %>" min="0" step="25" /></div>
+          <div><label>4 h</label><input type="number" name="rate4hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate4hVnd != null ? r.baseHourlyTiers.rate4hVnd / 1000 : '' %>" min="0" step="25" /></div>
+          <div><label>6 h</label><input type="number" name="rate6hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate6hVnd != null ? r.baseHourlyTiers.rate6hVnd / 1000 : '' %>" min="0" step="25" /></div>
+          <div><label>8 h</label><input type="number" name="rate8hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate8hVnd != null ? r.baseHourlyTiers.rate8hVnd / 1000 : '' %>" min="0" step="25" /></div>
+          <div><label>12 h</label><input type="number" name="rate12hK" value="<%= r.baseHourlyTiers && r.baseHourlyTiers.rate12hVnd != null ? r.baseHourlyTiers.rate12hVnd / 1000 : '' %>" min="0" step="25" /></div>
         </div>
         <label>Description (public)</label>
         <textarea name="description" rows="2" style="width:100%; max-width:none"><%= r.description || '' %></textarea>
@@ -179,13 +179,13 @@
         <label>Max guests</label><input type="number" name="maxGuests" value="2" min="1" required />
       </div>
       <div>
-        <label>Weekday day rate (₫'000)</label><input type="number" name="baseDayRateK" min="0" step="0.5" required placeholder="900" />
+        <label>Weekday day rate (₫'000)</label><input type="number" name="baseDayRateK" min="0" step="25" required placeholder="900" />
       </div>
       <div>
-        <label>Weekend day rate (₫'000, optional)</label><input type="number" name="baseWeekendRateK" min="0" step="0.5" placeholder="leave blank to match weekday" />
+        <label>Weekend day rate (₫'000, optional)</label><input type="number" name="baseWeekendRateK" min="0" step="25" placeholder="leave blank to match weekday" />
       </div>
       <div>
-        <label>Per-hour fallback (₫'000)</label><input type="number" name="baseHourlyRateK" min="0" step="0.5" required placeholder="150" />
+        <label>Per-hour fallback (₫'000)</label><input type="number" name="baseHourlyRateK" min="0" step="25" required placeholder="150" />
       </div>
       <div>
         <label>&nbsp;</label>
@@ -194,11 +194,11 @@
     </div>
     <h4 style="margin: 1rem 0 0.25rem;">Hourly tier prices (₫'000, optional)</h4>
     <div class="grid cols-3">
-      <div><label>2 h</label><input type="number" name="rate2hK" min="0" step="0.5" /></div>
-      <div><label>4 h</label><input type="number" name="rate4hK" min="0" step="0.5" /></div>
-      <div><label>6 h</label><input type="number" name="rate6hK" min="0" step="0.5" /></div>
-      <div><label>8 h</label><input type="number" name="rate8hK" min="0" step="0.5" /></div>
-      <div><label>12 h</label><input type="number" name="rate12hK" min="0" step="0.5" /></div>
+      <div><label>2 h</label><input type="number" name="rate2hK" min="0" step="25" /></div>
+      <div><label>4 h</label><input type="number" name="rate4hK" min="0" step="25" /></div>
+      <div><label>6 h</label><input type="number" name="rate6hK" min="0" step="25" /></div>
+      <div><label>8 h</label><input type="number" name="rate8hK" min="0" step="25" /></div>
+      <div><label>12 h</label><input type="number" name="rate12hK" min="0" step="25" /></div>
     </div>
     <label>Description</label><textarea name="description" rows="2" style="width:100%; max-width:none"></textarea>
     <label>Features (one per line)</label><textarea name="features" rows="4" style="width:100%; max-width:none"></textarea>
