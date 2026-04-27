@@ -1,42 +1,53 @@
 <%- include('../_header') %>
 <%- include('_nav') %>
 <h1>Sales agents</h1>
+<p class="muted-small">
+  Commissions are calculated <strong>per booking</strong>. Percentage rules apply
+  to the <em>net revenue after discount codes</em>; fixed rules pay a flat
+  amount per booking. Fixed rule values are entered in <strong>thousands of VND</strong>
+  (type <code>120</code> for ₫120,000).
+</p>
 
 <div class="card">
-  <h2>Weekly commission summary (last 6 weeks)</h2>
-  <p class="muted-small">Earned = sum of confirmed-booking commissions whose ledger entry was created during the week. Paid = sum of payment screenshots uploaded against that week.</p>
-  <table>
-    <thead>
-      <tr>
-        <th>Agent</th>
-        <% weeks.forEach(function(w){ %><th><%= w %></th><% }) %>
-        <th>Lifetime earned</th>
-        <th>Lifetime paid</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% if (agentRows.length === 0) { %>
-        <tr><td colspan="<%= weeks.length + 3 %>" class="muted">No sales agents yet — add one below.</td></tr>
-      <% } %>
-      <% agentRows.forEach(function(row){ %>
+  <h2>Weekly commission summary — all agents</h2>
+  <% if (aggregateRows.length === 0) { %>
+    <p class="muted">No commission activity yet.</p>
+  <% } else { %>
+    <table>
+      <thead>
         <tr>
-          <td><strong><%= row.agent.fullName %></strong><br><span class="muted-small"><%= row.agent.email %></span></td>
-          <% row.weekly.forEach(function(w){
-               var unpaid = Math.max(0, w.earned - w.paidAmount);
-               var color = unpaid > 0 ? 'badge bad' : (w.earned > 0 ? 'badge good' : '');
-          %>
-            <td>
-              <%= formatVnd(w.earned) %>
-              <% if (unpaid > 0) { %><br><span class="<%= color %>"><%= formatVnd(unpaid) %> unpaid</span>
-              <% } else if (w.earned > 0) { %><br><span class="badge good">paid</span><% } %>
-            </td>
-          <% }) %>
-          <td><%= formatVnd(row.lifetimeEarned) %></td>
-          <td><%= formatVnd(row.lifetimePaid) %></td>
+          <th>Week of</th>
+          <th>Bookings</th>
+          <th>Net revenue</th>
+          <th>Commissions earned</th>
+          <th>Commissions paid</th>
+          <th>Outstanding</th>
         </tr>
-      <% }) %>
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        <% aggregateRows.forEach(function(r){
+             var outstanding = Math.max(0, r.commissionVnd - r.paidAmountVnd);
+        %>
+          <tr>
+            <td><strong><%= r.weekStartIso %></strong></td>
+            <td><%= r.bookingCount %></td>
+            <td><%= formatVnd(r.netRevenueVnd) %></td>
+            <td><%= formatVnd(r.commissionVnd) %></td>
+            <td><%= formatVnd(r.paidAmountVnd) %></td>
+            <td>
+              <% if (outstanding > 0) { %>
+                <span class="badge bad"><%= formatVnd(outstanding) %></span>
+              <% } else if (r.commissionVnd > 0) { %>
+                <span class="badge good">paid</span>
+              <% } else { %>
+                —
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
 </div>
 
 <% agentRows.forEach(function(row){ %>
@@ -45,7 +56,11 @@
       <%= row.agent.fullName %>
       <span class="badge <%= row.agent.isActive ? 'good' : 'bad' %>"><%= row.agent.isActive ? 'active' : 'inactive' %></span>
     </h2>
-    <p class="muted-small"><%= row.agent.email %><% if (row.agent.phone) { %> · <%= row.agent.phone %><% } %></p>
+    <p class="muted-small">
+      <%= row.agent.email %><% if (row.agent.phone) { %> · <%= row.agent.phone %><% } %>
+      · lifetime: <%= row.lifetimeBookings %> bookings · <%= formatVnd(row.lifetimeNetRevenue) %> net
+      · earned <%= formatVnd(row.lifetimeEarned) %> · paid <%= formatVnd(row.lifetimePaid) %>
+    </p>
 
     <details style="margin-bottom: 0.75rem;">
       <summary><span class="badge">Edit profile</span></summary>
@@ -65,7 +80,13 @@
         <h3>Commission rule</h3>
         <% if (row.rule) { %>
           <p>
-            <strong><%= row.rule.commissionType === 'percentage' ? row.rule.value + '% of net' : formatVnd(row.rule.value) + ' fixed' %></strong>
+            <strong>
+              <% if (row.rule.commissionType === 'percentage') { %>
+                <%= row.rule.value %>% of net revenue (after discount codes)
+              <% } else { %>
+                <%= formatVnd(row.rule.value) %> fixed per booking
+              <% } %>
+            </strong>
           </p>
         <% } else { %>
           <p class="muted">No active rule — agent will earn nothing until you set one.</p>
@@ -75,13 +96,21 @@
             <div>
               <label>Type</label>
               <select name="commissionType">
-                <option value="percentage" <%= row.rule && row.rule.commissionType === 'percentage' ? 'selected' : '' %>>Percentage</option>
-                <option value="fixed" <%= row.rule && row.rule.commissionType === 'fixed' ? 'selected' : '' %>>Fixed (₫)</option>
+                <option value="percentage" <%= row.rule && row.rule.commissionType === 'percentage' ? 'selected' : '' %>>Percentage of net</option>
+                <option value="fixed" <%= row.rule && row.rule.commissionType === 'fixed' ? 'selected' : '' %>>Fixed (₫'000)</option>
               </select>
             </div>
             <div>
-              <label>Value</label>
-              <input type="number" name="commissionValue" step="0.5" min="0" value="<%= row.rule ? row.rule.value : 0 %>" required />
+              <label>Value <span class="muted-small">— <code>8</code> for 8%, <code>120</code> for ₫120,000</span></label>
+              <%
+                var displayValue = '';
+                if (row.rule) {
+                  displayValue = row.rule.commissionType === 'fixed'
+                    ? row.rule.value / 1000
+                    : row.rule.value;
+                }
+              %>
+              <input type="number" name="commissionValue" step="any" min="0" value="<%= displayValue %>" required />
             </div>
           </div>
           <p>
@@ -138,48 +167,70 @@
       </div>
     </div>
 
-    <h3>Recent payments</h3>
-    <% if (row.recentPayments.length === 0) { %><p class="muted-small">No payments recorded yet.</p><% } %>
-    <% if (row.recentPayments.length) { %>
-      <table>
-        <thead><tr><th>Week of</th><th>Amount</th><th>Paid at</th><th>Notes</th><th>Screenshot</th></tr></thead>
-        <tbody>
-          <% row.recentPayments.forEach(function(p){ %>
+    <h3>Weekly commissions <span class="muted-small">(every week with activity, including historical)</span></h3>
+    <% if (row.weeklyRows.length === 0) { %>
+      <p class="muted">No commission activity yet.</p>
+    <% } else { %>
+      <div class="table-wrap">
+        <table>
+          <thead>
             <tr>
-              <td><%= p.weekStartIso %></td>
-              <td><%= formatVnd(p.amountVnd) %></td>
-              <td><%= formatDateTime(p.paidAt) %></td>
-              <td><%= p.notes || '' %></td>
-              <td><% if (p.screenshotUrl) { %><a href="<%= p.screenshotUrl %>" target="_blank">view</a><% } else { %>—<% } %></td>
+              <th>Week of</th>
+              <th>Bookings</th>
+              <th>Net revenue</th>
+              <th>Commissions</th>
+              <th>Paid</th>
+              <th>Screenshots</th>
+              <th>Upload payment</th>
             </tr>
-          <% }) %>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <% row.weeklyRows.forEach(function(w){
+                 var outstanding = Math.max(0, w.commissionVnd - w.paidAmountVnd);
+                 var formId = 'pay-' + row.agent.id + '-' + w.weekStartIso;
+            %>
+              <tr>
+                <td>
+                  <strong><%= w.weekStartIso %></strong>
+                  <% if (outstanding > 0) { %><br><span class="badge bad"><%= formatVnd(outstanding) %> due</span>
+                  <% } else if (w.commissionVnd > 0) { %><br><span class="badge good">paid</span><% } %>
+                </td>
+                <td><%= w.bookingCount %></td>
+                <td><%= formatVnd(w.netRevenueVnd) %></td>
+                <td><%= formatVnd(w.commissionVnd) %></td>
+                <td><%= formatVnd(w.paidAmountVnd) %></td>
+                <td>
+                  <% if (w.payments.length === 0) { %>
+                    <span class="muted-small">—</span>
+                  <% } else { %>
+                    <% w.payments.forEach(function(p){ %>
+                      <% if (p.screenshotUrl) { %>
+                        <a href="<%= p.screenshotUrl %>" target="_blank" title="<%= formatVnd(p.amountVnd) %> · <%= formatDateTime(p.paidAt) %><% if (p.notes) { %> · <%= p.notes %><% } %>">
+                          <img src="<%= p.screenshotUrl %>" alt="proof" style="height:36px; vertical-align:middle; border:1px solid var(--border); border-radius:3px;" />
+                        </a>
+                      <% } else { %>
+                        <span class="muted-small" title="<%= formatDateTime(p.paidAt) %>"><%= formatVnd(p.amountVnd) %> (no image)</span>
+                      <% } %>
+                    <% }) %>
+                  <% } %>
+                </td>
+                <td>
+                  <form method="post" action="/admin/agents/<%= row.agent.id %>/payments" enctype="multipart/form-data" id="<%= formId %>">
+                    <input type="hidden" name="weekStartIso" value="<%= w.weekStartIso %>" />
+                    <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+                      <label class="muted-small">₫'000</label>
+                      <input type="number" name="amountK" min="0" step="1" value="<%= outstanding > 0 ? Math.round(outstanding / 1000) : '' %>" placeholder="amount" required style="max-width:90px" />
+                      <input type="file" name="screenshot" accept="image/*" style="max-width:170px" />
+                      <button type="submit" class="secondary">Upload</button>
+                    </div>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
     <% } %>
-
-    <details>
-      <summary>+ Record a weekly commission payment</summary>
-      <form method="post" action="/admin/agents/<%= row.agent.id %>/payments" enctype="multipart/form-data">
-        <div class="grid cols-2">
-          <div>
-            <label>Week starting (Monday)</label>
-            <select name="weekStartIso" required>
-              <% weeks.forEach(function(w, i){ %>
-                <option value="<%= w %>" <%= i === 0 ? 'selected' : '' %>><%= w %></option>
-              <% }) %>
-            </select>
-          </div>
-          <div>
-            <label>Amount (₫)</label>
-            <input type="number" name="amountVnd" min="0" step="1000" required />
-          </div>
-        </div>
-        <label>Notes</label><input name="notes" />
-        <label>Bank-transfer screenshot</label>
-        <input type="file" name="screenshot" accept="image/*" />
-        <p><button type="submit">Record payment</button></p>
-      </form>
-    </details>
   </div>
 <% }) %>
 
@@ -194,11 +245,11 @@
       <div>
         <label>Commission type</label>
         <select name="commissionType">
-          <option value="percentage">Percentage of net</option>
-          <option value="fixed">Fixed (₫) per booking</option>
+          <option value="percentage">Percentage of net (after discount codes)</option>
+          <option value="fixed">Fixed per booking (₫'000)</option>
         </select>
       </div>
-      <div><label>Commission value</label><input type="number" name="commissionValue" min="0" step="0.5" required /></div>
+      <div><label>Commission value <span class="muted-small">— <code>8</code> for 8% or <code>120</code> for ₫120,000</span></label><input type="number" name="commissionValue" min="0" step="any" required /></div>
     </div>
     <p><button type="submit">Create agent</button></p>
   </form>

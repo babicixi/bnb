@@ -1904,7 +1904,6 @@ export function mountAdminRoutes(
     const agents = Array.from(repo.users.values()).filter(
       (u) => u.role === "sales_agent",
     );
-    const weeks = lastNWeeks(6);
     const ledgerByAgent = new Map<
       string,
       Array<import("../../domain/types.js").CommissionLedgerEntry>
@@ -1924,43 +1923,135 @@ export function mountAdminRoutes(
       paymentsByAgent.set(p.salesAgentId, arr);
     }
 
+    type WeeklyRow = {
+      weekStartIso: string;
+      bookingCount: number;
+      netRevenueVnd: number;
+      commissionVnd: number;
+      paidAmountVnd: number;
+      payments: Array<import("../../domain/types.js").AgentCommissionPayment>;
+    };
+
+    function buildWeeklyRows(
+      ledger: Array<import("../../domain/types.js").CommissionLedgerEntry>,
+      payments: Array<import("../../domain/types.js").AgentCommissionPayment>,
+    ): WeeklyRow[] {
+      const buckets = new Map<string, WeeklyRow>();
+      const get = (wk: string): WeeklyRow => {
+        let row = buckets.get(wk);
+        if (!row) {
+          row = {
+            weekStartIso: wk,
+            bookingCount: 0,
+            netRevenueVnd: 0,
+            commissionVnd: 0,
+            paidAmountVnd: 0,
+            payments: [],
+          };
+          buckets.set(wk, row);
+        }
+        return row;
+      };
+      for (const e of ledger) {
+        if (e.status === "voided") continue;
+        const wk = isoMondayOf(e.createdAt);
+        const row = get(wk);
+        const booking = repo.bookings.get(e.bookingId);
+        if (booking) {
+          row.bookingCount += 1;
+          row.netRevenueVnd += booking.finalRoomChargeVnd;
+        }
+        row.commissionVnd += e.amountVnd;
+      }
+      for (const p of payments) {
+        const row = get(p.weekStartIso);
+        row.paidAmountVnd += p.amountVnd;
+        row.payments.push(p);
+      }
+      const rows = Array.from(buckets.values());
+      // Always include the current week so admins can pre-record a payment.
+      const thisWeek = isoMondayOf(new Date());
+      if (!buckets.has(thisWeek)) {
+        rows.push({
+          weekStartIso: thisWeek,
+          bookingCount: 0,
+          netRevenueVnd: 0,
+          commissionVnd: 0,
+          paidAmountVnd: 0,
+          payments: [],
+        });
+      }
+      rows.sort((a, b) => b.weekStartIso.localeCompare(a.weekStartIso));
+      for (const r of rows) {
+        r.payments.sort((x, y) => y.paidAt.getTime() - x.paidAt.getTime());
+      }
+      return rows;
+    }
+
     const agentRows = agents.map((a) => {
       const ledger = ledgerByAgent.get(a.id) ?? [];
-      const lifetimeEarned = ledger.reduce((s, e) => s + e.amountVnd, 0);
-      const lifetimePaid = ledger
-        .filter((e) => e.status === "paid")
-        .reduce((s, e) => s + e.amountVnd, 0);
-      const weekly = weeks.map((wk) => {
-        const earned = ledger
-          .filter((e) => isoMondayOf(e.createdAt) === wk)
-          .reduce((s, e) => s + e.amountVnd, 0);
-        const paidAmount = (paymentsByAgent.get(a.id) ?? [])
-          .filter((p) => p.weekStartIso === wk)
-          .reduce((s, p) => s + p.amountVnd, 0);
-        return { week: wk, earned, paidAmount };
-      });
+      const payments = paymentsByAgent.get(a.id) ?? [];
+      const weeklyRows = buildWeeklyRows(ledger, payments);
+      const lifetimeBookings = weeklyRows.reduce(
+        (s, r) => s + r.bookingCount,
+        0,
+      );
+      const lifetimeNetRevenue = weeklyRows.reduce(
+        (s, r) => s + r.netRevenueVnd,
+        0,
+      );
+      const lifetimeEarned = weeklyRows.reduce(
+        (s, r) => s + r.commissionVnd,
+        0,
+      );
+      const lifetimePaid = weeklyRows.reduce((s, r) => s + r.paidAmountVnd, 0);
       return {
         agent: a,
+        weeklyRows,
+        lifetimeBookings,
+        lifetimeNetRevenue,
         lifetimeEarned,
         lifetimePaid,
-        weekly,
         rule: repo.commissionRules.find(
           (r) => r.salesAgentId === a.id && r.isActive,
         ),
         discounts: repo.discounts.filter(
           (d) => d.scope === "agent_specific" && d.salesAgentId === a.id,
         ),
-        recentPayments: (paymentsByAgent.get(a.id) ?? [])
-          .slice()
-          .sort((x, y) => y.paidAt.getTime() - x.paidAt.getTime())
-          .slice(0, 6),
       };
     });
 
+    // All-agent aggregate: union all weeks, sum across agents.
+    const allWeeks = new Map<string, WeeklyRow>();
+    for (const ar of agentRows) {
+      for (const r of ar.weeklyRows) {
+        let agg = allWeeks.get(r.weekStartIso);
+        if (!agg) {
+          agg = {
+            weekStartIso: r.weekStartIso,
+            bookingCount: 0,
+            netRevenueVnd: 0,
+            commissionVnd: 0,
+            paidAmountVnd: 0,
+            payments: [],
+          };
+          allWeeks.set(r.weekStartIso, agg);
+        }
+        agg.bookingCount += r.bookingCount;
+        agg.netRevenueVnd += r.netRevenueVnd;
+        agg.commissionVnd += r.commissionVnd;
+        agg.paidAmountVnd += r.paidAmountVnd;
+        agg.payments.push(...r.payments);
+      }
+    }
+    const aggregateRows = Array.from(allWeeks.values()).sort((a, b) =>
+      b.weekStartIso.localeCompare(a.weekStartIso),
+    );
+
     res.render("admin/agents", {
       title: "Sales agents",
-      weeks,
       agentRows,
+      aggregateRows,
       countDiscountUsage: (discountId: string) =>
         Array.from(repo.bookings.values()).filter(
           (b) => b.discountIdApplied === discountId,
@@ -1994,11 +2085,16 @@ export function mountAdminRoutes(
       passwordHash: bcrypt.hashSync(parsed.data.password, 8),
     };
     repo.users.set(id, user);
+    // Fixed commission is entered in ₫'000s (e.g. "120" = 120,000 ₫); percentage stays as-is.
+    const ruleValueVnd =
+      parsed.data.commissionType === "fixed"
+        ? Math.round(parsed.data.commissionValue * 1000)
+        : parsed.data.commissionValue;
     const rule = {
       id: nextId("commission-rule"),
       salesAgentId: id,
       commissionType: parsed.data.commissionType,
-      value: parsed.data.commissionValue,
+      value: ruleValueVnd,
       isActive: true,
     };
     repo.commissionRules.push(rule);
@@ -2167,11 +2263,15 @@ export function mountAdminRoutes(
     for (const r of repo.commissionRules) {
       if (r.salesAgentId === u.id && r.isActive) r.isActive = false;
     }
+    const ruleValueVnd =
+      parsed.data.commissionType === "fixed"
+        ? Math.round(parsed.data.commissionValue * 1000)
+        : parsed.data.commissionValue;
     const rule = {
       id: nextId("commission-rule"),
       salesAgentId: u.id,
       commissionType: parsed.data.commissionType,
-      value: parsed.data.commissionValue,
+      value: ruleValueVnd,
       isActive: true,
     };
     repo.commissionRules.push(rule);
@@ -2234,11 +2334,16 @@ export function mountAdminRoutes(
     res.redirect("/admin/agents");
   });
 
-  const paymentSchema = z.object({
-    weekStartIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    amountVnd: z.coerce.number().int().nonnegative(),
-    notes: z.string().optional(),
-  });
+  const paymentSchema = z
+    .object({
+      weekStartIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      amountVnd: z.coerce.number().int().nonnegative().optional(),
+      amountK: z.coerce.number().nonnegative().optional(),
+      notes: z.string().optional(),
+    })
+    .refine((v) => v.amountVnd !== undefined || v.amountK !== undefined, {
+      message: "amount required",
+    });
 
   router.post(
     "/agents/:id/payments",
@@ -2256,6 +2361,10 @@ export function mountAdminRoutes(
           .render("error", { title: "Invalid payment", message: "" });
         return;
       }
+      const amountVnd =
+        parsed.data.amountK !== undefined
+          ? Math.round(parsed.data.amountK * 1000)
+          : (parsed.data.amountVnd ?? 0);
       const screenshotUrl = req.file
         ? `/uploads/${path.basename(req.file.path)}`
         : undefined;
@@ -2263,7 +2372,7 @@ export function mountAdminRoutes(
         id: nextId("agent-payment"),
         salesAgentId: u.id,
         weekStartIso: parsed.data.weekStartIso,
-        amountVnd: parsed.data.amountVnd,
+        amountVnd,
         screenshotUrl,
         paidAt: new Date(),
         notes: parsed.data.notes || undefined,
@@ -2741,11 +2850,15 @@ export function mountAdminRoutes(
       res.status(400).render("error", { title: "Invalid rule", message: "" });
       return;
     }
+    const ruleValueVnd =
+      parsed.data.commissionType === "fixed"
+        ? Math.round(parsed.data.value * 1000)
+        : parsed.data.value;
     const rule = {
       id: nextId("commission-rule"),
       salesAgentId: parsed.data.salesAgentId,
       commissionType: parsed.data.commissionType,
-      value: parsed.data.value,
+      value: ruleValueVnd,
       isActive: parsed.data.isActive === "1",
       validFrom: parsed.data.validFrom || undefined,
       validUntil: parsed.data.validUntil || undefined,

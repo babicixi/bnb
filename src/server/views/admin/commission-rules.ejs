@@ -34,10 +34,10 @@
     </select>
     <label>Type</label>
     <select name="commissionType">
-      <option value="percentage">Percentage of net</option>
-      <option value="fixed">Fixed (₫) per booking</option>
+      <option value="percentage">Percentage of net (after discount codes)</option>
+      <option value="fixed">Fixed per booking (₫'000)</option>
     </select>
-    <label>Value</label>
+    <label>Value <span class="muted-small">— enter <code>8</code> for 8% or <code>120</code> for ₫120,000 fixed</span></label>
     <input type="number" name="value" min="0" step="any" required />
     <label>Valid from</label><input type="date" name="validFrom" />
     <label>Valid until</label><input type="date" name="validUntil" />
