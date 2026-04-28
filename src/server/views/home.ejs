@@ -3,18 +3,18 @@
 <section class="hero">
   <div class="hero-inner">
     <h1><%= t('site.tagline') %></h1>
-    <p class="subtitle">Boutique serviced apartments in Hanoi — book by the hour, the day, or the week. Instant confirmation, transparent pricing, no hidden fees.</p>
+    <p class="subtitle"><%= locale === 'vi' ? 'Xác nhận tức thời, giá minh bạch, không phụ phí ẩn.' : 'Instant confirmation, transparent pricing, no hidden fees.' %></p>
     <div class="hero-cta">
-      <a href="#rooms" class="btn">Browse rooms</a>
-      <a href="/lookup" class="btn secondary">Find my booking</a>
+      <a href="#rooms" class="btn"><%= t('landing.browse_rooms') %></a>
+      <a href="/lookup" class="btn secondary"><%= t('landing.find_booking') %></a>
     </div>
     <div class="hero-contacts">
       <a href="tel:0966699738" class="contact-pill">
-        <span class="contact-label">Reservations</span><br>
+        <span class="contact-label"><%= t('landing.reservations_label') %></span><br>
         <strong>0966.699.738</strong>
       </a>
       <a href="tel:0988643307" class="contact-pill">
-        <span class="contact-label">Customer service</span><br>
+        <span class="contact-label"><%= t('landing.cs_label') %></span><br>
         <strong>0988.643.307</strong>
       </a>
     </div>
@@ -22,8 +22,8 @@
 </section>
 
 <section class="section" id="rooms">
-  <h2>Our rooms</h2>
-  <p class="lede">Hand-picked spaces across our buildings — from cozy studios to family suites.</p>
+  <h2><%= t('rooms.heading') %></h2>
+  <p class="lede"><%= t('landing.intro') %></p>
   <% buildings.forEach(function(b) { %>
     <% if (b.rooms.length === 0) return; %>
     <h3 style="margin: 1.5rem 0 1rem; font-size: 1.15rem;">
@@ -38,24 +38,26 @@
         <article class="room-card">
           <a class="media-link" href="/rooms/<%= r.id %>">
             <div class="media" style="<%= heroPhoto ? 'background-image: url(' + JSON.stringify(heroPhoto) + ');' : 'background: linear-gradient(135deg, #b03030 0%, #1a1a1a 100%);' %>">
-              <span class="price-pill">from <%= formatVnd(r.baseDayRateVnd) %>/night</span>
+              <span class="price-pill"><%= t('landing.from_per_night', formatVnd(r.baseDayRateVnd)) %></span>
             </div>
           </a>
           <div class="body">
             <h3><%= r.name %></h3>
-            <p class="building-line">Up to <%= r.maxGuests %> guest<%= r.maxGuests === 1 ? '' : 's' %><% if (r.roomNumber) { %> · room <%= r.roomNumber %><% } %></p>
+            <p class="building-line">
+              <%= t('landing.guests_up_to', r.maxGuests) %><% if (r.roomNumber) { %> · <%= t('landing.room_number', r.roomNumber) %><% } %>
+            </p>
             <% if (displayFeatures.length) { %>
               <div class="feature-tags">
                 <% displayFeatures.forEach(function(f){ %>
                   <span class="tag"><%= f %></span>
                 <% }) %>
                 <% if ((r.features || []).length > displayFeatures.length) { %>
-                  <span class="tag">+<%= r.features.length - displayFeatures.length %> more</span>
+                  <span class="tag"><%= t('landing.more_features', r.features.length - displayFeatures.length) %></span>
                 <% } %>
               </div>
             <% } %>
             <% if (fromHourly) { %>
-              <p class="muted-small" style="margin: 0 0 0.6rem;">or <%= formatVnd(fromHourly) %>/hour</p>
+              <p class="muted-small" style="margin: 0 0 0.6rem;"><%= t('landing.or_per_hour', formatVnd(fromHourly)) %></p>
             <% } %>
             <a class="room-cta" href="/rooms/<%= r.id %>"><%= t('rooms.book_now') %></a>
           </div>
@@ -66,41 +68,41 @@
 </section>
 
 <section class="section">
-  <h2>Talk to us</h2>
-  <p class="lede">Questions about rooms, dates, or special requests? Pick whichever channel you use most.</p>
+  <h2><%= t('landing.talk_heading') %></h2>
+  <p class="lede"><%= t('landing.talk_lede') %></p>
   <div class="social-grid">
     <a class="social-card facebook" href="https://www.facebook.com/cixi.serviceapartments" target="_blank" rel="noopener">
       <span class="social-icon" aria-hidden="true">f</span>
       <div>
-        <strong>Message us on Facebook</strong>
+        <strong><%= t('landing.fb_message') %></strong>
         <p>cixi.serviceapartments</p>
       </div>
     </a>
     <a class="social-card instagram" href="https://www.instagram.com/cixi.apartment" target="_blank" rel="noopener">
       <span class="social-icon" aria-hidden="true">📷</span>
       <div>
-        <strong>DM us on Instagram</strong>
+        <strong><%= t('landing.ig_message') %></strong>
         <p>@cixi.apartment</p>
       </div>
     </a>
     <a class="social-card tiktok" href="https://www.tiktok.com/@apartmentcixi" target="_blank" rel="noopener">
       <span class="social-icon" aria-hidden="true">🎵</span>
       <div>
-        <strong>Watch us on TikTok</strong>
+        <strong><%= t('landing.tt_watch') %></strong>
         <p>@apartmentcixi</p>
       </div>
     </a>
     <a class="social-card phone-call reservations" href="tel:0966699738">
       <span class="social-icon" aria-hidden="true">☎</span>
       <div>
-        <strong>Call Reservations</strong>
+        <strong><%= t('landing.call_reservations') %></strong>
         <p>0966.699.738</p>
       </div>
     </a>
     <a class="social-card phone-call cs" href="tel:0988643307">
       <span class="social-icon" aria-hidden="true">☎</span>
       <div>
-        <strong>Call Customer Service</strong>
+        <strong><%= t('landing.call_cs') %></strong>
         <p>0988.643.307</p>
       </div>
     </a>
@@ -108,24 +110,36 @@
 </section>
 
 <section class="section">
-  <h2>Latest from our Facebook page</h2>
-  <div class="fb-embed-wrap">
-    <iframe
-      src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fcixi.serviceapartments&tabs=timeline&width=500&height=720&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=true"
-      class="fb-embed"
-      scrolling="no" frameborder="0" allowfullscreen="true"
-      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-      loading="lazy"></iframe>
+  <h2><%= t('landing.fb_heading') %></h2>
+  <div class="fb-row">
+    <div class="fb-side">
+      <p><%= t('landing.fb_blurb') %></p>
+      <p style="margin-top:1rem;">
+        <a class="btn" href="https://www.facebook.com/cixi.serviceapartments" target="_blank" rel="noopener"><%= t('landing.fb_visit') %></a>
+      </p>
+      <p class="muted-small" style="margin-top:1rem;">
+        <strong><%= t('landing.fb_also') %>:</strong><br>
+        <a href="https://www.instagram.com/cixi.apartment" target="_blank" rel="noopener">Instagram @cixi.apartment</a><br>
+        <a href="https://www.tiktok.com/@apartmentcixi" target="_blank" rel="noopener">TikTok @apartmentcixi</a>
+      </p>
+    </div>
+    <div class="fb-embed-wrap">
+      <iframe
+        src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fcixi.serviceapartments&tabs=timeline&width=500&height=520&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=true"
+        class="fb-embed"
+        scrolling="no" frameborder="0" allowfullscreen="true"
+        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+        loading="lazy"></iframe>
+    </div>
   </div>
-  <p class="muted-small" style="margin-top:0.5rem;">Doesn't load? <a href="https://www.facebook.com/cixi.serviceapartments" target="_blank" rel="noopener">Open our Facebook page in a new tab</a>.</p>
 </section>
 
 <footer class="landing-footer">
-  <p style="margin:0 0 0.5rem;">© <%= new Date().getFullYear() %> Cixi Serviced Apartments · Hanoi</p>
+  <p style="margin:0 0 0.5rem;"><%= t('footer.brand_line', new Date().getFullYear()) %></p>
   <p style="margin:0;">
-    <a href="tel:0966699738" style="color:#fff;">Reservations 0966.699.738</a> ·
-    <a href="tel:0988643307" style="color:#fff;">Customer service 0988.643.307</a> ·
-    <a href="/lookup" style="color:#fff;">Find your reservation</a>
+    <a href="tel:0966699738" style="color:#fff;"><%= t('landing.reservations_label') %> 0966.699.738</a> ·
+    <a href="tel:0988643307" style="color:#fff;"><%= t('landing.cs_label') %> 0988.643.307</a> ·
+    <a href="/lookup" style="color:#fff;"><%= t('footer.find_reservation') %></a>
   </p>
   <p style="margin:0.6rem 0 0;">
     <a href="https://www.facebook.com/cixi.serviceapartments" target="_blank" rel="noopener" style="color:#aaa; margin-right:0.75rem;">Facebook</a>

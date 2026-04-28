@@ -1,35 +1,148 @@
 <%- include('../_header') %>
 <%- include('_nav') %>
-<h1>Minibar items</h1>
+<h1>Minibar</h1>
 <p class="muted-small">All prices in <strong>thousands of VND</strong>: type <code>15</code> for 15,000 ₫.</p>
-<table>
-  <thead><tr><th>Name</th><th>Price (₫'000)</th><th>Active</th><th>Actions</th></tr></thead>
-  <tbody>
-    <% if (items.length === 0) { %><tr><td colspan="4" class="muted">No items.</td></tr><% } %>
-    <% items.forEach(function(i){ %>
-      <tr>
-        <td>
-          <form method="post" action="/admin/minibar/<%= i.id %>/edit" id="m-<%= i.id %>" style="display:none"></form>
-          <input form="m-<%= i.id %>" type="text" name="name" value="<%= i.name %>" required style="max-width:220px" />
-        </td>
-        <td>
-          <input form="m-<%= i.id %>" type="number" name="unitPriceK" value="<%= i.unitPriceVnd / 1000 %>" min="0" step="1" style="max-width:100px" />
-          <span class="muted-small"><%= formatVnd(i.unitPriceVnd) %></span>
-        </td>
-        <td><%= i.isActive ? 'Yes' : 'No' %></td>
-        <td>
-          <button form="m-<%= i.id %>" type="submit">Save</button>
-          <form method="post" action="/admin/minibar/<%= i.id %>/toggle" style="display:inline">
-            <button type="submit" class="secondary"><%= i.isActive ? 'Deactivate' : 'Activate' %></button>
-          </form>
-        </td>
-      </tr>
-    <% }) %>
-  </tbody>
-</table>
+<% if (flash) { %><p class="success"><%= flash %></p><% } %>
 
 <div class="card">
-  <h2>Add an item</h2>
+  <h2>Inventory by room <span class="muted-small">· stock = restocks − usage</span></h2>
+  <% if (inventory.length === 0 || activeItems.length === 0) { %>
+    <p class="muted">Add at least one room and one active minibar item to start tracking inventory.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="inventory-matrix">
+        <thead>
+          <tr>
+            <th class="sticky-col">Room</th>
+            <% activeItems.forEach(function(i){ %>
+              <th><%= i.name %><br><span class="muted-small"><%= formatVnd(i.unitPriceVnd) %></span></th>
+            <% }) %>
+          </tr>
+        </thead>
+        <tbody>
+          <% inventory.forEach(function(row){ %>
+            <tr>
+              <td class="sticky-col"><strong><%= row.room.name %></strong><% if (row.room.roomNumber) { %><br><span class="muted-small">#<%= row.room.roomNumber %></span><% } %></td>
+              <% row.cells.forEach(function(c){ %>
+                <td class="<%= c.low ? 'inv-low' : '' %>">
+                  <div class="inv-stock <%= c.stock < 0 ? 'inv-neg' : '' %>"><%= c.stock %></div>
+                  <div class="muted-small">in: <%= c.restocked %> · out: <%= c.used %></div>
+                  <% if (c.low) { %><div><span class="badge bad">low</span></div><% } %>
+                  <details>
+                    <summary class="muted-small">Restock / threshold</summary>
+                    <form method="post" action="/admin/minibar/restock" style="margin:0.4rem 0; display:flex; gap:0.3rem; align-items:center;">
+                      <input type="hidden" name="roomId" value="<%= row.room.id %>" />
+                      <input type="hidden" name="itemId" value="<%= c.item.id %>" />
+                      <label class="muted-small" style="margin:0;">+</label>
+                      <input type="number" name="quantity" min="1" value="6" style="max-width:60px" required />
+                      <button type="submit" class="secondary" style="padding:0.15rem 0.5rem;">Add</button>
+                    </form>
+                    <form method="post" action="/admin/minibar/threshold" style="display:flex; gap:0.3rem; align-items:center;">
+                      <input type="hidden" name="roomId" value="<%= row.room.id %>" />
+                      <input type="hidden" name="itemId" value="<%= c.item.id %>" />
+                      <label class="muted-small" style="margin:0;">alert ≤</label>
+                      <input type="number" name="reorderAt" min="0" value="<%= c.reorderAt %>" style="max-width:60px" />
+                      <button type="submit" class="secondary" style="padding:0.15rem 0.5rem;">Set</button>
+                    </form>
+                  </details>
+                </td>
+              <% }) %>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>Recent usage <span class="muted-small">(last 200)</span></h2>
+  <% if (usageRecent.length === 0) { %>
+    <p class="muted">No usage reported yet.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>When</th><th>Room</th><th>Booking</th><th>Item</th><th>Qty</th><th>Charged</th></tr></thead>
+        <tbody>
+          <% usageRecent.forEach(function(u){
+               var item = items.find(function(x){ return x.id === u.minibarItemId; });
+               var b = bookingById(u.bookingId);
+               var rid = u.roomId || (b ? b.roomId : null);
+               var room = rid ? rooms.find(function(r){ return r.id === rid; }) : null;
+          %>
+            <tr>
+              <td><%= formatDateTime(u.createdAt) %></td>
+              <td><%= room ? room.name : '—' %></td>
+              <td><% if (b) { %><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a><% } else { %>—<% } %></td>
+              <td><%= item ? item.name : u.minibarItemId %></td>
+              <td><%= u.quantity %></td>
+              <td><%= formatVnd(u.totalVnd) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>Recent restocks <span class="muted-small">(last 200)</span></h2>
+  <% if (restockRecent.length === 0) { %>
+    <p class="muted">Nothing logged yet.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>When</th><th>Room</th><th>Item</th><th>+ Qty</th><th>Notes</th></tr></thead>
+        <tbody>
+          <% restockRecent.forEach(function(r){
+               var item = items.find(function(x){ return x.id === r.minibarItemId; });
+               var room = rooms.find(function(rr){ return rr.id === r.roomId; });
+          %>
+            <tr>
+              <td><%= formatDateTime(r.createdAt) %></td>
+              <td><%= room ? room.name : r.roomId %></td>
+              <td><%= item ? item.name : r.minibarItemId %></td>
+              <td>+<%= r.quantity %></td>
+              <td class="muted-small"><%= r.notes || '' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>Catalog</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Price (₫'000)</th><th>Active</th><th>Actions</th></tr></thead>
+    <tbody>
+      <% if (items.length === 0) { %><tr><td colspan="4" class="muted">No items.</td></tr><% } %>
+      <% items.forEach(function(i){ %>
+        <tr>
+          <td>
+            <form method="post" action="/admin/minibar/<%= i.id %>/edit" id="m-<%= i.id %>" style="display:none"></form>
+            <input form="m-<%= i.id %>" type="text" name="name" value="<%= i.name %>" required style="max-width:220px" />
+          </td>
+          <td>
+            <input form="m-<%= i.id %>" type="number" name="unitPriceK" value="<%= i.unitPriceVnd / 1000 %>" min="0" step="1" style="max-width:100px" />
+            <span class="muted-small"><%= formatVnd(i.unitPriceVnd) %></span>
+          </td>
+          <td><%= i.isActive ? 'Yes' : 'No' %></td>
+          <td>
+            <button form="m-<%= i.id %>" type="submit">Save</button>
+            <form method="post" action="/admin/minibar/<%= i.id %>/toggle" style="display:inline">
+              <button type="submit" class="secondary"><%= i.isActive ? 'Deactivate' : 'Activate' %></button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Add a catalog item</h2>
   <form method="post" action="/admin/minibar">
     <label>Name</label><input name="name" required />
     <label>Unit price (₫'000)</label><input type="number" name="unitPriceK" min="0" step="1" required placeholder="15" />

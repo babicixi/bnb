@@ -95,7 +95,10 @@ export interface Room {
   /** When false, the room cannot be booked hourly. Defaults to true. */
   hourlyEnabled?: boolean;
   isActive: boolean;
+  /** Legacy single-language description (used when description_en/vi missing). */
   description?: string;
+  descriptionEn?: string;
+  descriptionVi?: string;
   features?: string[];
   photoUrls?: string[];
   videoUrls?: string[];
@@ -279,12 +282,35 @@ export interface CleaningJob {
 export interface MinibarUsage {
   id: Id;
   bookingId: Id;
+  /** The room the booking is in — denormalized so usage can be aggregated by room without joining bookings. */
+  roomId?: Id;
   minibarItemId: Id;
   cleaningJobId?: Id;
   quantity: number;
   totalVnd: number;
   reportedByUserId?: Id;
   createdAt: Date;
+}
+
+/** A restock event: cleaner/manager dropped N units of an item into a room. */
+export interface MinibarRestock {
+  id: Id;
+  roomId: Id;
+  minibarItemId: Id;
+  quantity: number;
+  notes?: string;
+  performedByUserId?: Id;
+  createdAt: Date;
+}
+
+/**
+ * Optional admin-set low-stock threshold per room/item. Stock on hand below
+ * this triggers a low-stock badge on the inventory page.
+ */
+export interface MinibarStockThreshold {
+  roomId: Id;
+  minibarItemId: Id;
+  reorderAt: number; // raise alert when stock <= this
 }
 
 export interface CleaningRating {

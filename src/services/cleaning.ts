@@ -141,10 +141,12 @@ export function reportMinibarUsage(input: {
   }
   const totalVnd = input.item.unitPriceVnd * input.quantity;
   input.booking.minibarChargesVnd += totalVnd;
+  recomputeExtrasBalance(input.booking);
 
   return {
     id: input.id,
     bookingId: input.booking.id,
+    roomId: input.booking.roomId,
     minibarItemId: input.item.id,
     cleaningJobId: input.job.id,
     quantity: input.quantity,
@@ -172,7 +174,42 @@ export function reportCleaningDamage(input: {
       : input.notes;
   }
   input.booking.damageChargesVnd += input.damageChargesVnd;
+  recomputeExtrasBalance(input.booking);
   return input.job;
+}
+
+/**
+ * Reconciles a booking's amountDue / refundDue with the extras (minibar +
+ * damages) reported during the stay. The security deposit acts as collateral
+ * for these extras: if extras stay below the deposit, nothing more is owed
+ * and the refund-due shrinks; once extras pass the deposit, the surplus
+ * becomes amountDue and the booking flips to "extra_payment_required" so it
+ * surfaces in the admin queue. Cancellations have their own refund logic, so
+ * we leave those alone.
+ */
+export function recomputeExtrasBalance(booking: Booking): void {
+  if (booking.status === "cancelled" || booking.status === "closed") return;
+  const extras =
+    (booking.minibarChargesVnd || 0) + (booking.damageChargesVnd || 0);
+  const deposit = booking.securityDepositVnd || 0;
+  if (extras <= deposit) {
+    booking.amountDueVnd = 0;
+    booking.refundDueVnd = deposit - extras;
+  } else {
+    booking.amountDueVnd = extras - deposit;
+    booking.refundDueVnd = 0;
+    const liveStatuses: ReadonlyArray<Booking["status"]> = [
+      "confirmed",
+      "checked_in",
+      "checked_out",
+      "cleaning_assigned",
+      "cleaning_in_progress",
+      "cleaned",
+    ];
+    if (liveStatuses.includes(booking.status)) {
+      booking.status = "extra_payment_required";
+    }
+  }
 }
 
 export function addCleaningPhoto(input: {

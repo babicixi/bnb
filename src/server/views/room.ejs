@@ -17,37 +17,50 @@
     const sidePhotos = photos.slice(1, 5);
   %>
 
-  <% if (photos.length || videos.length) { %>
-    <% if (heroPhoto) { %>
-      <div class="media-gallery">
-        <a class="media-hero" href="<%= heroPhoto %>" target="_blank" style="background-image: url('<%= heroPhoto %>');"></a>
+  <% if (videos.length) { %>
+    <div class="video-row">
+      <% videos.forEach(function(u){ %>
+        <div class="video-tile"><%- videoEmbed(u) %></div>
+      <% }) %>
+    </div>
+  <% } %>
+
+  <% if (photos.length) { %>
+    <div class="media-gallery <%= photos.length > 1 ? 'has-slideshow' : '' %>" id="room-gallery" data-photo-count="<%= photos.length %>">
+      <button type="button" class="media-hero" data-photo-index="0" style="background-image: url('<%= heroPhoto %>');" aria-label="Open photo">
+        <% if (photos.length > 1) { %>
+          <span class="gallery-arrow gallery-prev" data-action="prev" aria-label="Previous">&#10094;</span>
+          <span class="gallery-arrow gallery-next" data-action="next" aria-label="Next">&#10095;</span>
+          <span class="gallery-counter"><span id="hero-counter">1</span> / <%= photos.length %></span>
+        <% } %>
+      </button>
+      <% if (sidePhotos.length) { %>
         <div class="media-side">
           <% sidePhotos.forEach(function(u, i){ %>
-            <a class="media-tile" href="<%= u %>" target="_blank" style="background-image: url('<%= u %>');"></a>
+            <button type="button" class="media-tile" data-photo-index="<%= i + 1 %>" style="background-image: url('<%= u %>');" aria-label="Open photo"></button>
           <% }) %>
-          <% var fillSlots = 4 - sidePhotos.length; for (var i = 0; i < fillSlots; i++) { %>
+          <% var fillSlots = 4 - sidePhotos.length; for (var j = 0; j < fillSlots; j++) { %>
             <div class="media-tile media-tile-empty"></div>
           <% } %>
         </div>
-      </div>
-      <% if (photos.length > 5) { %>
-        <p class="muted-small" style="margin:0.4rem 0 1rem;">+<%= photos.length - 5 %> more photos — open any image to see full size.</p>
       <% } %>
-    <% } else if (photos.length) { %>
-      <div class="photo-row">
-        <% photos.forEach(function(u){ %>
-          <a href="<%= u %>" target="_blank" class="image-thumb"><img src="<%= u %>" alt="<%= room.name %>" /></a>
-        <% }) %>
-      </div>
+    </div>
+    <% if (photos.length > 5) { %>
+      <p class="muted-small" style="margin:0.4rem 0 1rem;">
+        <button type="button" class="link-button" id="show-all-photos">+<%= photos.length - 5 %> more — view all <%= photos.length %> photos</button>
+      </p>
     <% } %>
+  <% } %>
 
-    <% if (videos.length) { %>
-      <div class="video-row">
-        <% videos.forEach(function(u){ %>
-          <div class="video-tile"><%- videoEmbed(u) %></div>
-        <% }) %>
-      </div>
-    <% } %>
+  <!-- Lightbox modal -->
+  <% if (photos.length) { %>
+    <div class="lightbox" id="lightbox" hidden>
+      <button type="button" class="lightbox-close" data-action="close" aria-label="Close">&times;</button>
+      <button type="button" class="lightbox-nav lightbox-prev" data-action="prev" aria-label="Previous">&#10094;</button>
+      <button type="button" class="lightbox-nav lightbox-next" data-action="next" aria-label="Next">&#10095;</button>
+      <img class="lightbox-img" id="lightbox-img" alt="Room photo" />
+      <div class="lightbox-counter"><span id="lightbox-counter">1</span> / <%= photos.length %></div>
+    </div>
   <% } %>
 
   <div class="room-detail-grid">
@@ -62,19 +75,23 @@
         </p>
       </div>
 
-      <% if (room.description) { %>
+      <% var desc = roomDescription(room); %>
+      <% if (desc) { %>
         <div class="card">
-          <h2>About this place</h2>
-          <p><%= room.description %></p>
+          <h2><%= t('room.about') %></h2>
+          <p><%= desc %></p>
         </div>
       <% } %>
 
       <% if (room.features && room.features.length) { %>
         <div class="card">
-          <h2>Features</h2>
-          <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+          <h2><%= t('room.features') %></h2>
+          <div class="features-grid">
             <% room.features.forEach(function(f){ %>
-              <span class="tag" style="background:#f5efef; color:#5b3030; font-size:0.85rem; padding:0.25rem 0.6rem; border-radius:999px;"><%= f %></span>
+              <div class="feature-pill">
+                <span class="feature-pill-icon"><%= featureIcon(f) %></span>
+                <span><%= featureLabel(f) %></span>
+              </div>
             <% }) %>
           </div>
         </div>
@@ -93,10 +110,10 @@
         const hourlyEnabled = room.hourlyEnabled !== false;
       %>
       <div class="card booking-form-card">
-        <h2 style="margin-top:0;">Reserve</h2>
+        <h2 style="margin-top:0;"><%= t('room.reserve') %></h2>
         <% if (!hourlyEnabled) { %>
           <p class="muted-small" style="background:#fff5e6; padding:0.5rem 0.75rem; border-radius:4px; border:1px solid #f0d4a8;">
-            Nightly stays only. Pick different dates for check-in and check-out.
+            <%= t('room.nightly_only') %>
           </p>
         <% } %>
         <% if (error) { %><p class="error"><%= error %></p><% } %>
@@ -119,7 +136,7 @@
               </div>
             <% } else { %>
               <div>
-                <label class="muted-small">Standard check-in</label>
+                <label class="muted-small"><%= t('room.standard_checkin') %></label>
                 <p style="margin:0.55rem 0 0;"><strong>14:00</strong></p>
                 <input type="hidden" id="bf-checkInTime" name="checkInTime" value="14:00" />
               </div>
@@ -139,7 +156,7 @@
               </div>
             <% } else { %>
               <div>
-                <label class="muted-small">Standard check-out</label>
+                <label class="muted-small"><%= t('room.standard_checkout') %></label>
                 <p style="margin:0.55rem 0 0;"><strong>11:00</strong></p>
                 <input type="hidden" id="bf-checkOutTime" name="checkOutTime" value="11:00" />
               </div>
@@ -149,16 +166,11 @@
           <div id="bf-availability" class="availability-banner empty">Pick check-in and check-out to see availability.</div>
 
           <p class="muted-small" style="margin-top:0.6rem;">
-            <% if (hourlyEnabled) { %>
-              Same day → hourly · different days → day / multi-day. Day &amp; multi-day check-in must be at or after 14:00.<br>
-              <strong>Late check-out:</strong> 11:00–12:00 free · 12:00–14:00 = 2h tier · 14:00–16:00 = 4h tier · 16:00–18:00 = 6h tier (rounded up). After 18:00 = extra full day.
-            <% } else { %>
-              Standard check-in 14:00, check-out 11:00.<br>
-              <strong>Late check-out:</strong> 11:00–12:00 free · 12:00–18:00 = hourly tier rounded up to 2/4/6h. After 18:00 = extra full day.
-            <% } %>
+            <%= t('room.detect_rules') %><br>
+            <strong><%= t('room.late_checkout') %>:</strong> <%= t('room.late_rules') %>
           </p>
 
-          <h3 style="margin: 1.25rem 0 0.4rem;">Your details</h3>
+          <h3 style="margin: 1.25rem 0 0.4rem;"><%= t('room.your_details') %></h3>
           <div class="grid cols-2 details-grid">
             <div>
               <label><%= t('booking.guest_name') %></label>
@@ -204,14 +216,14 @@
     var outAt = compose(co.value, cot.value);
     if (!inAt || !outAt) {
       banner.className = 'availability-banner empty';
-      banner.textContent = 'Pick check-in and check-out to see availability.';
+      banner.textContent = <%- JSON.stringify(t('room.pick_dates')) %>;
       submit.disabled = false;
       return;
     }
     if (ctrl) ctrl.abort();
     ctrl = new AbortController();
     banner.className = 'availability-banner checking';
-    banner.textContent = 'Checking availability…';
+    banner.textContent = <%- JSON.stringify(t('room.checking')) %>;
     submit.disabled = true;
     fetch('/book/check?roomId=' + encodeURIComponent(roomId) +
           '&checkInAt=' + encodeURIComponent(inAt) +
@@ -250,4 +262,87 @@
   });
 })();
 </script>
+
+<% if (photos.length) { %>
+<script>
+(function(){
+  var photos = <%- JSON.stringify(photos) %>;
+  var heroEl = document.querySelector('.media-hero');
+  var heroCounter = document.getElementById('hero-counter');
+  var lightbox = document.getElementById('lightbox');
+  var lbImg = document.getElementById('lightbox-img');
+  var lbCounter = document.getElementById('lightbox-counter');
+  var current = 0;
+  var heroIndex = 0;
+  var rotateTimer = null;
+
+  function setHero(idx){
+    heroIndex = ((idx % photos.length) + photos.length) % photos.length;
+    if (heroEl) heroEl.style.backgroundImage = "url('" + photos[heroIndex].replace(/'/g, "\\'") + "')";
+    if (heroCounter) heroCounter.textContent = String(heroIndex + 1);
+  }
+
+  function startSlideshow(){
+    if (photos.length <= 1) return;
+    stopSlideshow();
+    rotateTimer = setInterval(function(){ setHero(heroIndex + 1); }, 5000);
+  }
+  function stopSlideshow(){ if (rotateTimer) { clearInterval(rotateTimer); rotateTimer = null; } }
+
+  function openLightbox(idx){
+    if (!lightbox) return;
+    current = idx;
+    lbImg.src = photos[current];
+    lbCounter.textContent = String(current + 1);
+    lightbox.hidden = false;
+    document.body.style.overflow = 'hidden';
+    stopSlideshow();
+  }
+  function closeLightbox(){
+    if (!lightbox) return;
+    lightbox.hidden = true;
+    document.body.style.overflow = '';
+    startSlideshow();
+  }
+  function step(delta){
+    current = ((current + delta) % photos.length + photos.length) % photos.length;
+    lbImg.src = photos[current];
+    lbCounter.textContent = String(current + 1);
+  }
+
+  // Hero & side tiles open the lightbox at their index
+  document.querySelectorAll('[data-photo-index]').forEach(function(el){
+    el.addEventListener('click', function(e){
+      var act = e.target && e.target.dataset && e.target.dataset.action;
+      if (act === 'prev') { e.preventDefault(); e.stopPropagation(); setHero(heroIndex - 1); return; }
+      if (act === 'next') { e.preventDefault(); e.stopPropagation(); setHero(heroIndex + 1); return; }
+      var idx = parseInt(el.dataset.photoIndex, 10) || 0;
+      // hero opens at currently-visible index, tiles at their own
+      openLightbox(el === heroEl ? heroIndex : idx);
+    });
+  });
+
+  var showAll = document.getElementById('show-all-photos');
+  if (showAll) showAll.addEventListener('click', function(){ openLightbox(0); });
+
+  if (lightbox) {
+    lightbox.addEventListener('click', function(e){
+      var act = e.target && e.target.dataset && e.target.dataset.action;
+      if (act === 'close' || e.target === lightbox) closeLightbox();
+      else if (act === 'prev') step(-1);
+      else if (act === 'next') step(1);
+    });
+    document.addEventListener('keydown', function(e){
+      if (lightbox.hidden) return;
+      if (e.key === 'Escape') closeLightbox();
+      else if (e.key === 'ArrowLeft') step(-1);
+      else if (e.key === 'ArrowRight') step(1);
+    });
+  }
+
+  startSlideshow();
+})();
+</script>
+<% } %>
+
 <%- include('_footer') %>

@@ -1671,11 +1671,31 @@ export function mountAdminRoutes(
     rate12hK: z.string().optional(),
     hourlyEnabled: z.string().optional(),
     description: z.string().optional(),
-    features: z.string().optional(),
+    descriptionEn: z.string().optional(),
+    descriptionVi: z.string().optional(),
+    features: z.union([z.string(), z.array(z.string())]).optional(),
+    customFeatures: z.string().optional(),
     photoUrls: z.string().optional(),
     videoUrls: z.string().optional(),
     isActive: z.string().optional(),
   });
+
+  function combineFeatures(
+    features: string | string[] | undefined,
+    customLines: string | undefined,
+  ): string[] {
+    const fromCheckboxes = Array.isArray(features)
+      ? features
+      : features
+        ? [features]
+        : [];
+    const fromCustom = (customLines ?? "")
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // Dedup preserving order: catalog keys first, then custom strings.
+    return Array.from(new Set([...fromCheckboxes, ...fromCustom]));
+  }
 
   function parseTiersK(data: {
     rate2hK?: string;
@@ -1736,7 +1756,12 @@ export function mountAdminRoutes(
         hourlyEnabled: parsed.data.hourlyEnabled === "1",
         isActive: parsed.data.isActive === "1",
         description: parsed.data.description || undefined,
-        features: parseLines(parsed.data.features),
+        descriptionEn: parsed.data.descriptionEn || undefined,
+        descriptionVi: parsed.data.descriptionVi || undefined,
+        features: combineFeatures(
+          parsed.data.features,
+          parsed.data.customFeatures,
+        ),
         photoUrls: [...parseLines(parsed.data.photoUrls), ...uploadedPhotoUrls],
         videoUrls: parseLines(parsed.data.videoUrls),
         syncStatus: "not_synced" as const,
@@ -1781,7 +1806,12 @@ export function mountAdminRoutes(
       room.hourlyEnabled = parsed.data.hourlyEnabled === "1";
       room.isActive = parsed.data.isActive === "1";
       room.description = parsed.data.description || undefined;
-      room.features = parseLines(parsed.data.features);
+      room.descriptionEn = parsed.data.descriptionEn || undefined;
+      room.descriptionVi = parsed.data.descriptionVi || undefined;
+      room.features = combineFeatures(
+        parsed.data.features,
+        parsed.data.customFeatures,
+      );
       room.photoUrls = [
         ...parseLines(parsed.data.photoUrls),
         ...uploadedPhotoUrls,
@@ -3406,12 +3436,150 @@ export function mountAdminRoutes(
     res.redirect("/admin/commission-rules");
   });
 
-  // ---------- Minibar items ----------
-  router.get("/minibar", (_req, res) => {
+  // ---------- Minibar items + per-room inventory ----------
+  /**
+   * Stock on hand per (room, item) = sum of restocks − sum of usage. We treat
+   * each restock as adding to the room's pantry and each usage event as
+   * draining from it. Negative values mean cleaners reported usage we never
+   * stocked for (data-entry catch-up); the UI surfaces those clearly.
+   */
+  function buildInventory() {
+    const rooms = Array.from(repo.rooms.values());
+    const items = Array.from(repo.minibarItems.values()).filter(
+      (i) => i.isActive,
+    );
+    const thresholdMap = new Map<string, number>();
+    for (const t of repo.minibarThresholds) {
+      thresholdMap.set(`${t.roomId}::${t.minibarItemId}`, t.reorderAt);
+    }
+    const restocks = new Map<string, number>();
+    for (const r of repo.minibarRestocks) {
+      const k = `${r.roomId}::${r.minibarItemId}`;
+      restocks.set(k, (restocks.get(k) ?? 0) + r.quantity);
+    }
+    const usage = new Map<string, number>();
+    for (const u of repo.minibarUsage) {
+      const rid = u.roomId ?? repo.bookings.get(u.bookingId)?.roomId;
+      if (!rid) continue;
+      const k = `${rid}::${u.minibarItemId}`;
+      usage.set(k, (usage.get(k) ?? 0) + u.quantity);
+    }
+    return rooms.map((room) => ({
+      room,
+      cells: items.map((item) => {
+        const k = `${room.id}::${item.id}`;
+        const restocked = restocks.get(k) ?? 0;
+        const used = usage.get(k) ?? 0;
+        const stock = restocked - used;
+        const reorderAt = thresholdMap.get(k) ?? 0;
+        return {
+          item,
+          restocked,
+          used,
+          stock,
+          reorderAt,
+          low: reorderAt > 0 && stock <= reorderAt,
+        };
+      }),
+    }));
+  }
+
+  router.get("/minibar", (req, res) => {
+    const usageRecent = repo.minibarUsage
+      .slice()
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 200);
+    const restockRecent = repo.minibarRestocks
+      .slice()
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 200);
     res.render("admin/minibar", {
       title: "Minibar items",
       items: Array.from(repo.minibarItems.values()),
+      inventory: buildInventory(),
+      rooms: Array.from(repo.rooms.values()),
+      activeItems: Array.from(repo.minibarItems.values()).filter(
+        (i) => i.isActive,
+      ),
+      bookingById: (id?: string) => (id ? repo.bookings.get(id) : undefined),
+      usageRecent,
+      restockRecent,
+      flash: typeof req.query.flash === "string" ? req.query.flash : "",
     });
+  });
+
+  const restockSchema = z.object({
+    roomId: z.string().min(1),
+    itemId: z.string().min(1),
+    quantity: z.coerce.number().int().positive(),
+    notes: z.string().optional(),
+  });
+
+  router.post("/minibar/restock", (req: RequestWithUser, res) => {
+    const parsed = restockSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.redirect(
+        "/admin/minibar?flash=" +
+          encodeURIComponent("Invalid restock entry."),
+      );
+      return;
+    }
+    const restock = {
+      id: nextId("restock"),
+      roomId: parsed.data.roomId,
+      minibarItemId: parsed.data.itemId,
+      quantity: parsed.data.quantity,
+      notes: parsed.data.notes || undefined,
+      performedByUserId: req.currentUser?.id,
+      createdAt: new Date(),
+    };
+    repo.minibarRestocks.push(restock);
+    audit(repo, req, {
+      action: "minibar.restock",
+      entityType: "minibar_restock",
+      entityId: restock.id,
+      after: restock as Record<string, unknown>,
+    });
+    res.redirect(
+      `/admin/minibar?flash=${encodeURIComponent(`Restocked +${restock.quantity}`)}`,
+    );
+  });
+
+  const thresholdSchema = z.object({
+    roomId: z.string().min(1),
+    itemId: z.string().min(1),
+    reorderAt: z.coerce.number().int().nonnegative(),
+  });
+
+  router.post("/minibar/threshold", (req, res) => {
+    const parsed = thresholdSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.redirect("/admin/minibar?flash=" + encodeURIComponent("Invalid threshold."));
+      return;
+    }
+    const idx = repo.minibarThresholds.findIndex(
+      (t) =>
+        t.roomId === parsed.data.roomId &&
+        t.minibarItemId === parsed.data.itemId,
+    );
+    if (parsed.data.reorderAt === 0) {
+      if (idx >= 0) repo.minibarThresholds.splice(idx, 1);
+    } else if (idx >= 0) {
+      repo.minibarThresholds[idx]!.reorderAt = parsed.data.reorderAt;
+    } else {
+      repo.minibarThresholds.push({
+        roomId: parsed.data.roomId,
+        minibarItemId: parsed.data.itemId,
+        reorderAt: parsed.data.reorderAt,
+      });
+    }
+    audit(repo, req, {
+      action: "minibar.threshold_set",
+      entityType: "minibar_threshold",
+      entityId: `${parsed.data.roomId}::${parsed.data.itemId}`,
+      after: { reorderAt: parsed.data.reorderAt },
+    });
+    res.redirect("/admin/minibar?flash=Threshold+saved");
   });
 
   const minibarItemSchema = z.object({

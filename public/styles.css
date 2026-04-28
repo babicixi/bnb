@@ -118,6 +118,9 @@ tr:hover td { background: #fafaf2; }
 .bookings-table { min-width: 1100px; }
 .bookings-table th, .bookings-table td { white-space: nowrap; }
 .bookings-table td.cell-ellipsis { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.guests-table { min-width: 1300px; }
+.guests-table tr.guest-bookings-row td { background: #fafafa; padding: 0.25rem 0.5rem; border-top: 0; }
+.guests-table tr.guest-bookings-row table { background: #fff; }
 .error { color: var(--bad); font-size: 0.9rem; }
 .success { color: var(--good); font-size: 0.95rem; }
 .countdown { font-size: 1.25rem; font-weight: 600; color: var(--bad); }
@@ -232,31 +235,150 @@ tr:hover td { background: #fafaf2; }
   max-width: none;
 }
 
-/* Reports performance matrix */
-.reports-matrix { font-size: 0.86rem; }
-.reports-matrix th, .reports-matrix td { padding: 0.4rem 0.5rem; vertical-align: top; }
-.reports-matrix .room-name { white-space: nowrap; min-width: 9rem; }
-.reports-matrix .totals-col { background: #fafaf2; }
-.reports-matrix tr.building-header td {
-  background: #1a1a1a; color: #fff; font-weight: 600;
+/* Reports — full-width revenue trend chart wrap */
+.trend-chart-wrap { width: 100%; }
+.trend-chart-wrap svg { display: block; width: 100%; }
+
+/* Reports performance matrix with freeze-pane (sticky first column + first row) */
+.reports-matrix-wrap {
+  overflow: auto;
+  max-height: 75vh;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  position: relative;
 }
-.reports-matrix tr.building-total td { background: #fff5e6; font-weight: 600; }
-.reports-matrix tr.grand-total td { background: #f1ebeb; font-weight: 700; border-top: 2px solid var(--border); }
+.reports-matrix {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.86rem;
+  table-layout: fixed;
+  width: max-content;
+}
+.reports-matrix th,
+.reports-matrix td {
+  padding: 0.5rem 0.55rem;
+  vertical-align: top;
+  width: 12rem;
+  height: 5.6rem;
+  border-right: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+  box-sizing: border-box;
+}
+.reports-matrix .sticky-col {
+  position: sticky;
+  left: 0;
+  width: 11rem;
+  min-width: 11rem;
+  max-width: 11rem;
+  z-index: 2;
+  background: #fafafa;
+  border-right: 2px solid var(--border);
+}
+.reports-matrix .sticky-row {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  font-weight: 600;
+  z-index: 3;
+  border-bottom: 2px solid var(--border);
+  height: 2.6rem;
+}
+.reports-matrix th.sticky-col.sticky-row {
+  z-index: 4;
+  background: #f1ebeb;
+}
+.reports-matrix .room-name { white-space: nowrap; }
+.reports-matrix .totals-col { background: #fff5e6 !important; }
+.reports-matrix tr.building-header td {
+  background: #1a1a1a !important;
+  color: #fff;
+  font-weight: 600;
+  height: 2.4rem;
+}
+.reports-matrix tr.building-header td.sticky-col { background: #1a1a1a !important; color: #fff; }
+.reports-matrix tr.building-header td.sticky-col strong { color: #fff; }
+.reports-matrix tr.building-total td {
+  background: #fff5e6 !important;
+  font-weight: 600;
+}
+.reports-matrix tr.grand-total td {
+  background: #f1ebeb !important;
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+}
 .report-cell {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.25rem 0.6rem;
-  min-width: 11rem;
-  font-size: 0.8rem;
+  gap: 0.2rem 0.6rem;
+  font-size: 0.78rem;
   line-height: 1.25;
 }
-.report-cell .rc-k { color: var(--muted); display: inline-block; min-width: 2.4rem; }
+.report-cell .rc-k { color: var(--muted); display: inline-block; min-width: 2.2rem; }
 .report-cell .rc-v { font-weight: 600; }
 .report-cell .rc-pos { color: var(--good); }
 .report-cell .rc-neg { color: var(--bad); }
 
+/* Feature checkbox grid (Properties admin) */
+.feature-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.5rem;
+  margin: 0.4rem 0 0.6rem;
+}
+.feature-checkbox {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  margin: 0 !important;
+}
+.feature-checkbox:hover { background: #fafafa; }
+.feature-checkbox:has(input:checked) {
+  background: #fff5e6;
+  border-color: var(--accent);
+}
+.feature-icon-tag {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+.feature-checkbox input[type="checkbox"] { margin: 0 !important; }
+
+/* Minibar inventory matrix */
+.inventory-matrix { font-size: 0.86rem; }
+.inventory-matrix th, .inventory-matrix td {
+  padding: 0.5rem 0.55rem;
+  vertical-align: top;
+  border-right: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+}
+.inventory-matrix .sticky-col {
+  position: sticky;
+  left: 0;
+  background: #fafafa;
+  border-right: 2px solid var(--border);
+  min-width: 9rem;
+  z-index: 1;
+}
+.inv-stock { font-size: 1.2rem; font-weight: 700; }
+.inv-neg { color: var(--bad); }
+.inv-low { background: #fff5e6 !important; }
+.inv-low .inv-stock { color: var(--accent); }
+
 /* -------------------- Landing page -------------------- */
-body.landing main { max-width: 1200px; padding: 0 1rem 4rem; }
+body.landing main {
+  max-width: 1200px;
+  /* No top margin so the hero starts flush against the page top and the
+     transparent header overlays the red hero (not a strip of white body). */
+  margin: 0 auto;
+  padding: 0 1rem 4rem;
+}
 body.landing header {
   border-bottom: none;
   background: transparent;
@@ -462,18 +584,29 @@ body.landing { background: #fff; }
 .social-card.phone-call.reservations { background: #2a7a3a; }
 .social-card.phone-call.cs { background: #1f6f9f; }
 
+.fb-row {
+  display: grid;
+  grid-template-columns: 1fr 500px;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+.fb-side {
+  background: #fafafa;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+.fb-side p { margin: 0.4rem 0; }
+.fb-side .btn { display: inline-block; }
 .fb-embed-wrap {
   background: #fafafa;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0;
   overflow: hidden;
-  /* lock to standard FB plugin aspect ratio so the iframe fills the card */
   position: relative;
+  height: 520px;
   width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  height: 720px;
 }
 .fb-embed {
   position: absolute;
@@ -481,6 +614,10 @@ body.landing { background: #fff; }
   width: 100%;
   height: 100%;
   border: 0;
+}
+@media (max-width: 760px) {
+  .fb-row { grid-template-columns: 1fr; }
+  .fb-embed-wrap { height: 600px; }
 }
 
 /* -------------------- Room detail page -------------------- */
@@ -543,6 +680,127 @@ body.landing { background: #fff; }
   aspect-ratio: 16 / 9;
   display: block;
   border: 0;
+}
+
+/* Gallery: hero is a button now, supports slideshow + click-to-open-lightbox. */
+.media-gallery .media-hero,
+.media-gallery .media-tile {
+  position: relative;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.media-gallery .media-hero:hover { filter: brightness(0.95); }
+.media-gallery .media-tile:hover { filter: brightness(0.92); }
+.gallery-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+  z-index: 2;
+  user-select: none;
+}
+.gallery-arrow:hover { background: rgba(0,0,0,0.65); }
+.gallery-prev { left: 0.75rem; }
+.gallery-next { right: 0.75rem; }
+.gallery-counter {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  z-index: 2;
+}
+.link-button {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  font: inherit;
+}
+
+/* Lightbox */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.lightbox-img {
+  max-width: 92vw;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+.lightbox-nav,
+.lightbox-close {
+  position: absolute;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  border: 0;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lightbox-nav:hover, .lightbox-close:hover { background: rgba(255,255,255,0.25); }
+.lightbox-prev { left: 1rem; top: 50%; transform: translateY(-50%); }
+.lightbox-next { right: 1rem; top: 50%; transform: translateY(-50%); }
+.lightbox-close { top: 1rem; right: 1rem; }
+.lightbox-counter {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  background: rgba(0,0,0,0.6);
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+/* Feature pills (room detail) */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+}
+.feature-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  background: #fafafa;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.92rem;
+}
+.feature-pill-icon {
+  font-size: 1.4rem;
+  line-height: 1;
 }
 
 /* Two-column page layout: room info on the left, sticky booking form on the right. */

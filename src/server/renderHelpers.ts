@@ -1,14 +1,28 @@
 import type { Request, Response, NextFunction } from "express";
-import { t, type Locale } from "./i18n.js";
+import { DEFAULT_LOCALE, t, type Locale } from "./i18n.js";
+import { FEATURES, featureIcon, featureLabel } from "../domain/features.js";
 
 export function attachLocaleAndHelpers(
   req: Request,
   res: Response,
   next: NextFunction,
 ): void {
-  const locale: Locale = req.query.locale === "vi" ? "vi" : "en";
+  // Vietnam-first audience: default to VI, allow ?locale=en (or vi) to override
+  // for that single response, and remember the choice in a cookie.
+  let locale: Locale = DEFAULT_LOCALE;
+  const cookieLocale = (req as Request & { cookies?: Record<string, string> })
+    .cookies?.locale;
+  if (cookieLocale === "en" || cookieLocale === "vi") locale = cookieLocale;
+  if (req.query.locale === "en" || req.query.locale === "vi") {
+    locale = req.query.locale;
+    res.cookie("locale", locale, {
+      httpOnly: false,
+      sameSite: "lax",
+      maxAge: 365 * 24 * 60 * 60_000,
+    });
+  }
   res.locals.locale = locale;
-  res.locals.t = (key: string) => t(key, locale);
+  res.locals.t = (key: string, ...args: unknown[]) => t(key, locale, ...args);
   res.locals.formatVnd = (n: number) =>
     new Intl.NumberFormat("vi-VN").format(n) + " ₫";
   res.locals.formatDateTime = (d: Date) => {
@@ -30,6 +44,18 @@ export function attachLocaleAndHelpers(
   ).currentUser;
   res.locals.currentPath = req.path;
   res.locals.videoEmbed = videoEmbedFor;
+  res.locals.featureCatalog = FEATURES;
+  res.locals.featureLabel = (key: string) => featureLabel(key, locale);
+  res.locals.featureIcon = featureIcon;
+  res.locals.roomDescription = (room: {
+    descriptionEn?: string;
+    descriptionVi?: string;
+    description?: string;
+  }) => {
+    if (locale === "vi" && room.descriptionVi) return room.descriptionVi;
+    if (locale === "en" && room.descriptionEn) return room.descriptionEn;
+    return room.descriptionVi || room.descriptionEn || room.description || "";
+  };
   next();
 }
 

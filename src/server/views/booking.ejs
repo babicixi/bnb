@@ -48,13 +48,13 @@
       })();
     </script>
   <% } %>
-  <p>Please transfer the exact amount below to:</p>
+  <p><%= t('booking.bank_label') %></p>
   <pre>BANK:      BIDV
 ACCOUNT:   8601099668
 NAME:      Ho Kinh Doanh Cixi Wanderlust
 REFERENCE: <%= booking.bookingNumber %>
 AMOUNT:    <%= formatVnd(booking.amountDueVnd) %></pre>
-  <p class="muted-small">Use the booking number <strong><%= booking.bookingNumber %></strong> as the transfer reference so we can match your payment automatically. Then upload the bank-transfer screenshot below.</p>
+  <p class="muted-small"><%= t('booking.bank_note', booking.bookingNumber) %></p>
   <form method="post" action="/book/<%= booking.bookingNumber %>/upload-proof" enctype="multipart/form-data">
     <label><%= t('booking.upload_proof') %></label>
     <input type="file" name="screenshot" accept="image/*" required />

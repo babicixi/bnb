@@ -4,15 +4,16 @@
 <p class="muted-small">
   Days: hourly = h/24 (e.g. 6h = 0.25d) · day rate = 1d (standard 14:00 → 11:00) ·
   multi-day = nights between Vietnam-local dates.
-  Occupancy % = days / <%= periodLengthDays %> for each <%= granularity %>.
+  Occupancy % = days / <%= periodLengthDays %> per <%= granularity %>.
   Cancelled and held bookings are excluded.
+  All money values in the matrix are in <strong>thousands of VND</strong>.
   Net = (room + minibar) − (discounts + commission + cleaning).
 </p>
 
 <%
-  function fmt(n) {
+  function fmtK(n) {
     if (!n) return '0';
-    return new Intl.NumberFormat('vi-VN').format(Math.round(n));
+    return new Intl.NumberFormat('vi-VN').format(Math.round(n / 1000));
   }
   function fmtV(n) {
     if (!n) return '—';
@@ -30,9 +31,6 @@
     });
     return p.toString();
   }
-  // Cell math: discount is a real cost (already netted out of finalRoomChargeVnd
-  // which is `roomRevenueVnd` here). To present "Rev (gross)" minus discounts we
-  // add discounts back into the revenue line and then count them as a cost.
   var periodLen = periodLengthDays;
   function cell(m){
     var rev = m.roomRevenueVnd + m.discountsVnd + m.minibarVnd;
@@ -41,6 +39,10 @@
     var occ = (m.daysBooked / periodLen) * 100;
     return { rev: rev, cost: cost, net: net, occ: occ };
   }
+  // Matrix order: Total first (sticky-left), then most-recent period, then older.
+  var orderedPeriods = periods.slice().reverse();
+  var orderedLabels = periodLabels.slice().reverse();
+  var orderedGrandPerPeriod = grandPerPeriod.slice().reverse();
 %>
 
 <form method="get" action="/admin/reports" class="card" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
@@ -85,8 +87,8 @@
 </div>
 
 <%
-  // ----- chart 1: room revenue trend (lines, one per room)
-  var chartW = 760, chartH = 240, padL = 56, padB = 30, padT = 12, padR = 12;
+  // ----- chart 1: room revenue trend - full width, rotated x labels
+  var chartW = 1200, chartH = 280, padL = 60, padB = 60, padT = 12, padR = 12;
   var plotW = chartW - padL - padR;
   var plotH = chartH - padT - padB;
   var maxRev = 1;
@@ -106,8 +108,8 @@
   <% if (roomReports.length === 0 || maxRev <= 1) { %>
     <p class="muted">No revenue in window.</p>
   <% } else { %>
-    <div style="overflow-x:auto;">
-      <svg viewBox="0 0 <%= chartW %> <%= chartH %>" width="100%" style="max-width:<%= chartW %>px; height:auto;">
+    <div class="trend-chart-wrap">
+      <svg viewBox="0 0 <%= chartW %> <%= chartH %>" preserveAspectRatio="none" width="100%" style="height:<%= chartH %>px;">
         <line x1="<%= padL %>" y1="<%= padT %>" x2="<%= padL %>" y2="<%= padT + plotH %>" stroke="#ccc" />
         <line x1="<%= padL %>" y1="<%= padT + plotH %>" x2="<%= padL + plotW %>" y2="<%= padT + plotH %>" stroke="#ccc" />
         <% [0, 0.25, 0.5, 0.75, 1].forEach(function(t){
@@ -117,8 +119,11 @@
           <line x1="<%= padL %>" y1="<%= y %>" x2="<%= padL + plotW %>" y2="<%= y %>" stroke="#eee" />
           <text x="<%= padL - 6 %>" y="<%= y + 4 %>" font-size="10" fill="#666" text-anchor="end"><%= (v/1_000_000).toFixed(1) %>M</text>
         <% }) %>
-        <% periods.forEach(function(p, i){ %>
-          <text x="<%= px(i) %>" y="<%= padT + plotH + 16 %>" font-size="9" fill="#666" text-anchor="middle"><%= periodLabels[i] %></text>
+        <% periods.forEach(function(p, i){
+             var lx = px(i);
+             var ly = padT + plotH + 12;
+        %>
+          <text x="<%= lx %>" y="<%= ly %>" font-size="10" fill="#666" text-anchor="end" transform="rotate(-30, <%= lx %>, <%= ly %>)"><%= periodLabels[i] %></text>
         <% }) %>
         <% roomReports.forEach(function(rr, ri){
              var color = palette[ri % palette.length];
@@ -126,7 +131,7 @@
         %>
           <polyline fill="none" stroke="<%= color %>" stroke-width="2" points="<%= pts %>" />
           <% rr.perPeriod.forEach(function(pp, i){ %>
-            <circle cx="<%= px(i) %>" cy="<%= py(pp.m.roomRevenueVnd) %>" r="2.5" fill="<%= color %>"><title><%= rr.room.name %> · <%= periodLabels[i] %>: <%= fmtV(pp.m.roomRevenueVnd) %></title></circle>
+            <circle cx="<%= px(i) %>" cy="<%= py(pp.m.roomRevenueVnd) %>" r="2.8" fill="<%= color %>"><title><%= rr.room.name %> · <%= periodLabels[i] %>: <%= fmtV(pp.m.roomRevenueVnd) %></title></circle>
           <% }) %>
         <% }) %>
       </svg>
@@ -140,7 +145,6 @@
 </div>
 
 <%
-  // ----- chart 2: window-total room comparison (horizontal bars)
   var maxTotal = 1;
   roomReports.forEach(function(rr){ if (rr.total.roomRevenueVnd > maxTotal) maxTotal = rr.total.roomRevenueVnd; });
   var sortedRooms = roomReports.slice().sort(function(a, b){ return b.total.roomRevenueVnd - a.total.roomRevenueVnd; });
@@ -175,7 +179,6 @@
 </div>
 
 <%
-  // Render one matrix cell: 2-column mini grid with operational + financial figures.
   function renderCell(m){
     var c = cell(m);
     return '<div class="report-cell">' +
@@ -185,59 +188,67 @@
         '<div><span class="rc-k">Occ</span> <span class="rc-v">' + c.occ.toFixed(0) + '%</span></div>' +
       '</div>' +
       '<div>' +
-        '<div><span class="rc-k">Rev</span> <span class="rc-v">' + fmt(c.rev) + '</span></div>' +
-        '<div><span class="rc-k">Cost</span> <span class="rc-v">' + fmt(c.cost) + '</span></div>' +
-        '<div><span class="rc-k">Net</span> <span class="rc-v ' + (c.net >= 0 ? 'rc-pos' : 'rc-neg') + '">' + fmt(c.net) + '</span></div>' +
+        '<div><span class="rc-k">Rev</span> <span class="rc-v">' + fmtK(c.rev) + '</span></div>' +
+        '<div><span class="rc-k">Cost</span> <span class="rc-v">' + fmtK(c.cost) + '</span></div>' +
+        '<div><span class="rc-k">Net</span> <span class="rc-v ' + (c.net >= 0 ? 'rc-pos' : 'rc-neg') + '">' + fmtK(c.net) + '</span></div>' +
       '</div>' +
     '</div>';
   }
+  // Re-index per-period arrays for easy reverse access
+  function reverseList(list){ return list.slice().reverse(); }
 %>
 
 <div class="card">
   <h2>Performance matrix</h2>
-  <p class="muted-small">Each cell: <strong>Bk</strong>=bookings, <strong>Dy</strong>=days booked, <strong>Occ</strong>=occupancy% · <strong>Rev</strong>=room+minibar (₫'000s), <strong>Cost</strong>=discounts+commission+cleaning, <strong>Net</strong>=Rev−Cost.</p>
-  <div class="table-wrap">
+  <p class="muted-small">
+    Each cell: <strong>Bk</strong>=bookings · <strong>Dy</strong>=days · <strong>Occ</strong>=occupancy %.
+    <strong>Rev</strong>=room+minibar · <strong>Cost</strong>=discounts+commission+cleaning · <strong>Net</strong>=Rev−Cost. All money in ₫'000s.
+    Total comes first; the most recent <%= granularity %> sits next to it, older periods scroll right.
+    The first column (room/building) and the header row are frozen so they stay visible while you scroll.
+  </p>
+  <div class="reports-matrix-wrap">
     <table class="reports-matrix">
       <thead>
         <tr>
-          <th>Building / Room</th>
-          <% periodLabels.forEach(function(lbl){ %>
-            <th><%= lbl %></th>
+          <th class="sticky-col sticky-row">Building / Room</th>
+          <th class="sticky-row totals-col">Total</th>
+          <% orderedLabels.forEach(function(lbl){ %>
+            <th class="sticky-row"><%= lbl %></th>
           <% }) %>
-          <th class="totals-col">Total</th>
         </tr>
       </thead>
       <tbody>
         <% buildingTree.forEach(function(bt){ %>
           <tr class="building-header">
-            <td colspan="<%= periods.length + 2 %>"><strong><%= bt.building.name %></strong> <span class="muted-small">· <%= bt.building.address %></span></td>
+            <td class="sticky-col"><strong><%= bt.building.name %></strong></td>
+            <td class="totals-col" colspan="<%= periods.length + 1 %>"><span class="muted-small">· <%= bt.building.address %></span></td>
           </tr>
           <% bt.rooms.forEach(function(rr){ %>
             <tr>
-              <td class="room-name">
+              <td class="room-name sticky-col">
                 <strong><%= rr.room.name %></strong>
                 <% if (rr.room.roomNumber) { %><br><span class="muted-small">#<%= rr.room.roomNumber %></span><% } %>
               </td>
-              <% rr.perPeriod.forEach(function(pp){ %>
+              <td class="totals-col"><%- renderCell(rr.total) %></td>
+              <% reverseList(rr.perPeriod).forEach(function(pp){ %>
                 <td><%- renderCell(pp.m) %></td>
               <% }) %>
-              <td class="totals-col"><%- renderCell(rr.total) %></td>
             </tr>
           <% }) %>
           <tr class="building-total">
-            <td><strong>Building total</strong></td>
-            <% bt.perPeriod.forEach(function(pp){ %>
+            <td class="sticky-col"><strong><%= bt.building.name %></strong></td>
+            <td class="totals-col"><%- renderCell(bt.total) %></td>
+            <% reverseList(bt.perPeriod).forEach(function(pp){ %>
               <td><%- renderCell(pp.m) %></td>
             <% }) %>
-            <td class="totals-col"><%- renderCell(bt.total) %></td>
           </tr>
         <% }) %>
         <tr class="grand-total">
-          <td><strong>Grand total</strong></td>
-          <% grandPerPeriod.forEach(function(pp){ %>
+          <td class="sticky-col"><strong>Grand total</strong></td>
+          <td class="totals-col"><%- renderCell(grandTotal) %></td>
+          <% orderedGrandPerPeriod.forEach(function(pp){ %>
             <td><%- renderCell(pp.m) %></td>
           <% }) %>
-          <td class="totals-col"><%- renderCell(grandTotal) %></td>
         </tr>
       </tbody>
     </table>

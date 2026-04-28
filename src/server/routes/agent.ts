@@ -28,19 +28,127 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
   const router = Router();
   router.use(requireRole("sales_agent"));
 
+  function isoMondayOf(d: Date): string {
+    const day = d.getUTCDay();
+    const diff = day === 0 ? 6 : day - 1;
+    const monday = new Date(
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - diff),
+    );
+    return monday.toISOString().slice(0, 10);
+  }
+
   router.get("/", (req, res) => {
     const agent = (req as RequestWithUser).currentUser!;
+    const fromQ =
+      typeof req.query.from === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)
+        ? req.query.from
+        : "";
+    const toQ =
+      typeof req.query.to === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)
+        ? req.query.to
+        : "";
+    const defaultFromIso = isoMondayOf(
+      new Date(Date.now() - 3 * 7 * 86_400_000),
+    );
+    const fromIso = fromQ || defaultFromIso;
+    const toIso = toQ;
+    const inRange = (wk: string) =>
+      (!fromIso || wk >= fromIso) && (!toIso || wk <= toIso);
+
     const ownBookings = Array.from(repo.bookings.values())
       .filter((b) => b.salesAgentId === agent.id)
       .sort((a, b) => b.checkInAt.getTime() - a.checkInAt.getTime());
+    const ledger = Array.from(repo.commissionLedger.values()).filter(
+      (e) => e.salesAgentId === agent.id,
+    );
+    const payments = repo.agentPayments.filter(
+      (p) => p.salesAgentId === agent.id,
+    );
+
+    type WeeklyRow = {
+      weekStartIso: string;
+      bookingCount: number;
+      netRevenueVnd: number;
+      commissionVnd: number;
+      paidAmountVnd: number;
+      payments: typeof payments;
+    };
+    const buckets = new Map<string, WeeklyRow>();
+    const get = (wk: string): WeeklyRow => {
+      let row = buckets.get(wk);
+      if (!row) {
+        row = {
+          weekStartIso: wk,
+          bookingCount: 0,
+          netRevenueVnd: 0,
+          commissionVnd: 0,
+          paidAmountVnd: 0,
+          payments: [],
+        };
+        buckets.set(wk, row);
+      }
+      return row;
+    };
+    for (const e of ledger) {
+      if (e.status === "voided") continue;
+      const wk = isoMondayOf(e.createdAt);
+      const row = get(wk);
+      const booking = repo.bookings.get(e.bookingId);
+      if (booking) {
+        row.bookingCount += 1;
+        row.netRevenueVnd += booking.finalRoomChargeVnd;
+      }
+      row.commissionVnd += e.amountVnd;
+    }
+    for (const p of payments) {
+      const row = get(p.weekStartIso);
+      if (p.status !== "void") row.paidAmountVnd += p.amountVnd;
+      row.payments.push(p);
+    }
+    const thisWeek = isoMondayOf(new Date());
+    if (!buckets.has(thisWeek)) get(thisWeek);
+    let weeklyRows = Array.from(buckets.values());
+    weeklyRows = weeklyRows.filter((r) => inRange(r.weekStartIso));
+    weeklyRows.sort((a, b) => b.weekStartIso.localeCompare(a.weekStartIso));
+    for (const r of weeklyRows) {
+      r.payments.sort((x, y) => y.paidAt.getTime() - x.paidAt.getTime());
+    }
+    const lifetimeBookings = weeklyRows.reduce(
+      (s, r) => s + r.bookingCount,
+      0,
+    );
+    const lifetimeNetRevenue = weeklyRows.reduce(
+      (s, r) => s + r.netRevenueVnd,
+      0,
+    );
+    const lifetimeEarned = weeklyRows.reduce(
+      (s, r) => s + r.commissionVnd,
+      0,
+    );
+    const lifetimePaid = weeklyRows.reduce(
+      (s, r) => s + r.paidAmountVnd,
+      0,
+    );
     const totalCommission = ownBookings.reduce(
       (s, b) => s + (b.calculatedCommissionVnd || 0),
       0,
+    );
+    const rule = repo.commissionRules.find(
+      (r) => r.salesAgentId === agent.id && r.isActive,
     );
     res.render("agent/index", {
       title: "My bookings",
       bookings: ownBookings,
       totalCommission,
+      weeklyRows,
+      lifetimeBookings,
+      lifetimeNetRevenue,
+      lifetimeEarned,
+      lifetimePaid,
+      rule,
+      filters: { from: fromIso, to: toIso, isDefault: !fromQ && !toQ },
       guestForBooking: (b: { guestId: string }) => repo.guests.get(b.guestId),
       roomForBooking: (b: { roomId: string }) => repo.rooms.get(b.roomId),
     });

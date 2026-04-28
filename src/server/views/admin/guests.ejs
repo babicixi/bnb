@@ -26,62 +26,93 @@
   <% if (rows.length === 0) { %>
     <p class="muted">No guests match.</p>
   <% } else { %>
-    <% rows.forEach(function(r){
-         var lastStay = r.lastStay ? r.lastStay.toISOString().slice(0,10) : '—';
-    %>
-      <details style="margin-bottom:0.6rem; padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:5px; background:#fff;">
-        <summary style="display:flex; flex-wrap:wrap; gap:0.4rem 1rem; align-items:center;">
-          <strong style="font-size:1.05rem;"><%= r.guest.fullName %></strong>
-          <span class="muted-small">📞 <%= r.guest.phone %></span>
-          <% if (r.guest.email) { %><span class="muted-small">✉️ <%= r.guest.email %></span><% } %>
-          <% if (r.guest.facebookHandle) { %><span class="muted-small">fb: <%= r.guest.facebookHandle %></span><% } %>
-          <% if (r.guest.instagramHandle) { %><span class="muted-small">ig: <%= r.guest.instagramHandle %></span><% } %>
-          <span style="margin-left:auto;" class="muted-small">last stay: <%= lastStay %> · <%= r.bookings.length %> booking<%= r.bookings.length === 1 ? '' : 's' %> · spent <strong><%= formatVnd(r.totalSpentVnd) %></strong></span>
-        </summary>
-
-        <% if (r.guest.notes) { %><p class="muted-small">Notes: <%= r.guest.notes %></p><% } %>
-
-        <% if (r.bookings.length === 0) { %>
-          <p class="muted-small">No bookings yet.</p>
-        <% } else { %>
-          <table style="margin-top:0.5rem;">
-            <thead>
-              <tr>
-                <th>Booking</th>
-                <th>Room</th>
-                <th>Check-in</th>
-                <th>Check-out</th>
-                <th>Status</th>
-                <th>Room charge</th>
-                <th>Minibar</th>
-                <th>Items used</th>
+    <div class="table-wrap">
+      <table class="bookings-table guests-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Facebook</th>
+            <th>Instagram</th>
+            <th>Bookings</th>
+            <th>Total spent</th>
+            <th>Last stay</th>
+            <th>Favourite minibar</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach(function(r){
+               var lastStay = r.lastStay ? r.lastStay.toISOString().slice(0,10) : '—';
+               // top minibar items across all guest bookings
+               var itemTally = new Map();
+               r.bookings.forEach(function(b){
+                 (r.minibarByBooking.get(b.id) || []).forEach(function(u){
+                   itemTally.set(u.minibarItemId, (itemTally.get(u.minibarItemId) || 0) + u.quantity);
+                 });
+               });
+               var topItems = Array.from(itemTally.entries())
+                 .sort(function(a,b){ return b[1]-a[1]; })
+                 .slice(0, 3)
+                 .map(function(pair){
+                   var item = minibarItemById(pair[0]);
+                   return (item ? item.name : pair[0]) + ' ×' + pair[1];
+                 })
+                 .join(', ');
+          %>
+            <tr>
+              <td class="cell-ellipsis" title="<%= r.guest.fullName %>">
+                <strong><%= r.guest.fullName %></strong>
+              </td>
+              <td><%= r.guest.phone || '—' %></td>
+              <td class="cell-ellipsis" title="<%= r.guest.email || '' %>"><%= r.guest.email || '—' %></td>
+              <td class="cell-ellipsis" title="<%= r.guest.facebookHandle || '' %>"><%= r.guest.facebookHandle || '—' %></td>
+              <td class="cell-ellipsis" title="<%= r.guest.instagramHandle || '' %>"><%= r.guest.instagramHandle || '—' %></td>
+              <td><%= r.bookings.length %></td>
+              <td><%= formatVnd(r.totalSpentVnd) %></td>
+              <td><%= lastStay %></td>
+              <td class="cell-ellipsis" title="<%= topItems %>"><%= topItems || '—' %></td>
+              <td class="cell-ellipsis" title="<%= r.guest.notes || '' %>"><%= r.guest.notes || '—' %></td>
+            </tr>
+            <% if (r.bookings.length > 0) { %>
+              <tr class="guest-bookings-row">
+                <td></td>
+                <td colspan="9">
+                  <details>
+                    <summary class="muted-small">Show <%= r.bookings.length %> booking<%= r.bookings.length === 1 ? '' : 's' %></summary>
+                    <table style="margin-top:0.4rem;">
+                      <thead><tr><th>Booking</th><th>Room</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Room charge</th><th>Minibar</th><th>Items used</th></tr></thead>
+                      <tbody>
+                        <% r.bookings.forEach(function(b){
+                             var room = roomById(b.roomId);
+                             var usages = (r.minibarByBooking.get(b.id) || []);
+                             var itemSummary = usages.map(function(u){
+                               var item = minibarItemById(u.minibarItemId);
+                               return (item ? item.name : u.minibarItemId) + ' ×' + u.quantity;
+                             }).join(', ');
+                        %>
+                          <tr>
+                            <td><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
+                            <td><%= room ? room.name : '—' %></td>
+                            <td><%= formatDateTime(b.checkInAt) %></td>
+                            <td><%= formatDateTime(b.checkOutAt) %></td>
+                            <td><span class="badge"><%= b.status %></span></td>
+                            <td><%= formatVnd(b.finalRoomChargeVnd) %></td>
+                            <td><%= b.minibarChargesVnd ? formatVnd(b.minibarChargesVnd) : '—' %></td>
+                            <td class="muted-small"><%= itemSummary || '—' %></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </details>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              <% r.bookings.forEach(function(b){
-                   var room = roomById(b.roomId);
-                   var usages = (r.minibarByBooking.get(b.id) || []);
-                   var itemSummary = usages.map(function(u){
-                     var item = minibarItemById(u.minibarItemId);
-                     return (item ? item.name : u.minibarItemId) + ' x' + u.quantity;
-                   }).join(', ');
-              %>
-                <tr>
-                  <td><a href="/admin/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
-                  <td><%= room ? room.name : '—' %></td>
-                  <td><%= formatDateTime(b.checkInAt) %></td>
-                  <td><%= formatDateTime(b.checkOutAt) %></td>
-                  <td><span class="badge"><%= b.status %></span></td>
-                  <td><%= formatVnd(b.finalRoomChargeVnd) %></td>
-                  <td><%= b.minibarChargesVnd ? formatVnd(b.minibarChargesVnd) : '—' %></td>
-                  <td class="muted-small"><%= itemSummary || '—' %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        <% } %>
-      </details>
-    <% }) %>
+            <% } %>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   <% } %>
 </div>
 <%- include('../_footer') %>

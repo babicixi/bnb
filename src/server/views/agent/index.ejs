@@ -1,24 +1,141 @@
 <%- include('../_header') %>
-<h1>My bookings</h1>
-<p>
-  <a class="btn" href="/agent/new">+ New booking</a>
-  <span class="muted-small">· total commission earned (calculated): <strong><%= formatVnd(totalCommission) %></strong></span>
+<h1>My dashboard</h1>
+
+<p style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+  <a class="btn" href="/agent/new">+ New booking on behalf of a guest</a>
 </p>
-<table>
-  <thead><tr><th>#</th><th>Room</th><th>Guest</th><th>Check-in</th><th>Status</th><th>Commission</th><th></th></tr></thead>
-  <tbody>
-    <% if (bookings.length === 0) { %><tr><td colspan="7" class="muted">No bookings yet.</td></tr><% } %>
-    <% bookings.forEach(function(b){ var g = guestForBooking(b); var r = roomForBooking(b); %>
-      <tr>
-        <td><a href="/agent/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
-        <td><%= r ? r.name : '—' %></td>
-        <td><%= g ? g.fullName : '—' %></td>
-        <td><%= formatDateTime(b.checkInAt) %></td>
-        <td><span class="badge"><%= b.status %></span></td>
-        <td><%= formatVnd(b.calculatedCommissionVnd) %></td>
-        <td><a class="btn secondary" href="/agent/bookings/<%= b.id %>">Open</a></td>
-      </tr>
-    <% }) %>
-  </tbody>
-</table>
+
+<div class="card">
+  <p class="muted-small" style="margin:0;">
+    Commission rule:
+    <% if (rule) { %>
+      <strong>
+        <% if (rule.commissionType === 'percentage') { %>
+          <%= rule.value %>% of net revenue (after discount codes)
+        <% } else { %>
+          <%= formatVnd(rule.value) %> fixed per booking
+        <% } %>
+      </strong>
+    <% } else { %>
+      <span class="muted">No active rule — ask an admin.</span>
+    <% } %>
+    · lifetime: <%= lifetimeBookings %> bookings ·
+    earned <strong><%= formatVnd(lifetimeEarned) %></strong> ·
+    paid <strong><%= formatVnd(lifetimePaid) %></strong> ·
+    outstanding <strong><%= formatVnd(Math.max(0, lifetimeEarned - lifetimePaid)) %></strong>
+  </p>
+</div>
+
+<form method="get" action="/agent" class="card" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+  <div style="flex:0 0 auto;">
+    <label>From week</label>
+    <input type="date" name="from" value="<%= filters.from %>" />
+  </div>
+  <div style="flex:0 0 auto;">
+    <label>To week</label>
+    <input type="date" name="to" value="<%= filters.to %>" />
+  </div>
+  <div style="flex:0 0 auto;">
+    <button type="submit">Apply range</button>
+    <% if (!filters.isDefault) { %>
+      <a href="/agent" class="btn secondary" style="margin-left:0.4rem;">Reset to last 4 weeks</a>
+    <% } %>
+  </div>
+  <div class="muted-small" style="flex:1 1 100%;">
+    Defaults to the trailing 4 weeks. Filters the weekly earnings & payments table below.
+  </div>
+</form>
+
+<div class="card">
+  <h2>Weekly earnings & payments</h2>
+  <% if (weeklyRows.length === 0) { %>
+    <p class="muted">No weeks with activity in this range.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Week of</th>
+            <th>Bookings</th>
+            <th>Net revenue</th>
+            <th>Commission earned</th>
+            <th>Paid</th>
+            <th>Outstanding</th>
+            <th>Bank-transfer screenshots</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% weeklyRows.forEach(function(w){
+               var outstanding = Math.max(0, w.commissionVnd - w.paidAmountVnd);
+          %>
+            <tr>
+              <td>
+                <strong><%= w.weekStartIso %></strong>
+                <% if (outstanding > 0) { %><br><span class="badge bad"><%= formatVnd(outstanding) %> due</span>
+                <% } else if (w.commissionVnd > 0) { %><br><span class="badge good">paid</span><% } %>
+              </td>
+              <td><%= w.bookingCount %></td>
+              <td><%= formatVnd(w.netRevenueVnd) %></td>
+              <td><%= formatVnd(w.commissionVnd) %></td>
+              <td><%= formatVnd(w.paidAmountVnd) %></td>
+              <td>
+                <% if (outstanding > 0) { %>
+                  <span class="badge bad"><%= formatVnd(outstanding) %></span>
+                <% } else if (w.commissionVnd > 0) { %>
+                  <span class="badge good">paid</span>
+                <% } else { %>
+                  —
+                <% } %>
+              </td>
+              <td>
+                <% if (w.payments.length === 0) { %>
+                  <span class="muted-small">—</span>
+                <% } else { %>
+                  <% w.payments.forEach(function(p){ var isVoid = p.status === 'void'; %>
+                    <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.25rem; <%= isVoid ? 'opacity:0.5;' : '' %>">
+                      <% if (p.screenshotUrl) { %>
+                        <a href="<%= p.screenshotUrl %>" target="_blank" title="<%= formatVnd(p.amountVnd) %> · <%= formatDateTime(p.paidAt) %><% if (p.notes) { %> · <%= p.notes %><% } %>">
+                          <img src="<%= p.screenshotUrl %>" alt="proof" style="height:42px; vertical-align:middle; border:1px solid var(--border); border-radius:3px;" />
+                        </a>
+                      <% } else { %>
+                        <span class="muted-small" title="<%= formatDateTime(p.paidAt) %>"><%= formatVnd(p.amountVnd) %></span>
+                      <% } %>
+                      <span class="badge <%= isVoid ? 'bad' : 'good' %>"><%= isVoid ? 'voided' : 'paid' %></span>
+                    </div>
+                  <% }) %>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted-small" style="margin-top:0.6rem;">
+      Disagree with anything? Message a manager — they upload bank-transfer screenshots after they pay you and can correct mistakes.
+    </p>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>My bookings <span class="muted-small">· total commission earned: <strong><%= formatVnd(totalCommission) %></strong></span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Room</th><th>Guest</th><th>Check-in</th><th>Status</th><th>Commission</th><th></th></tr></thead>
+      <tbody>
+        <% if (bookings.length === 0) { %><tr><td colspan="7" class="muted">No bookings yet.</td></tr><% } %>
+        <% bookings.forEach(function(b){ var g = guestForBooking(b); var r = roomForBooking(b); %>
+          <tr>
+            <td><a href="/agent/bookings/<%= b.id %>"><%= b.bookingNumber %></a></td>
+            <td><%= r ? r.name : '—' %></td>
+            <td><%= g ? g.fullName : '—' %></td>
+            <td><%= formatDateTime(b.checkInAt) %></td>
+            <td><span class="badge"><%= b.status %></span></td>
+            <td><%= formatVnd(b.calculatedCommissionVnd) %></td>
+            <td><a class="btn secondary" href="/agent/bookings/<%= b.id %>">Open</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
 <%- include('../_footer') %>

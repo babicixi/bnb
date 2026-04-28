@@ -19,6 +19,8 @@ import type {
   InternalTask,
   MaintenanceBlock,
   MinibarItem,
+  MinibarRestock,
+  MinibarStockThreshold,
   MinibarUsage,
   NotificationLogEntry,
   Payment,
@@ -43,6 +45,8 @@ export interface Repository {
   commissionRules: AgentCommissionRule[];
   minibarItems: Map<Id, MinibarItem>;
   minibarUsage: MinibarUsage[];
+  minibarRestocks: MinibarRestock[];
+  minibarThresholds: MinibarStockThreshold[];
   cleaningCrewProfiles: Map<Id, CleaningCrewProfile>;
   cleaningAvailability: CleaningAvailability[];
   cleaningJobs: Map<Id, CleaningJob>;
@@ -81,6 +85,8 @@ export function createRepository(): Repository {
     commissionRules: [],
     minibarItems: new Map(),
     minibarUsage: [],
+    minibarRestocks: [],
+    minibarThresholds: [],
     cleaningCrewProfiles: new Map(),
     cleaningAvailability: [],
     cleaningJobs: new Map(),

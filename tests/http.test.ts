@@ -194,7 +194,9 @@ describe("payment proof flow", () => {
     expect(upload.status).toBe(302);
     expect(upload.headers.location).toBe(`/book/${number}/confirmation`);
 
-    const conf = await request(ctx.app).get(`/book/${number}/confirmation`);
+    const conf = await request(ctx.app).get(
+      `/book/${number}/confirmation?locale=en`,
+    );
     expect(conf.status).toBe(200);
     expect(conf.text).toContain("Booking confirmed");
 
