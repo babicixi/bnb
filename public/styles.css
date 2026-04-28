@@ -403,18 +403,26 @@ body.landing { background: #fff; }
   justify-content: center;
 }
 .hero-contacts .contact-pill {
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.95);
   border-radius: 12px;
-  padding: 0.55rem 1rem;
-  color: #fff;
+  padding: 0.6rem 1.1rem;
+  color: #1a1a1a;
   text-decoration: none;
   font-size: 0.95rem;
   text-align: left;
   min-width: 11rem;
 }
-.hero-contacts .contact-pill:hover { background: rgba(255, 255, 255, 0.22); }
-.hero-contacts .contact-pill strong { font-size: 1.15rem; letter-spacing: 0.02em; }
+.hero-contacts .contact-pill:hover { background: #fff; }
+.hero-contacts .contact-pill strong { font-size: 1.15rem; letter-spacing: 0.02em; color: var(--accent); }
+.hero-contacts .contact-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6e1f1f;
+}
 
 .social-grid {
   display: grid;
@@ -451,15 +459,112 @@ body.landing { background: #fff; }
 .social-card.facebook { background: #1877f2; }
 .social-card.instagram { background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
 .social-card.tiktok { background: linear-gradient(135deg, #25f4ee 0%, #000 50%, #fe2c55 100%); }
-.social-card.phone { background: #2a7a3a; }
+.social-card.phone-call.reservations { background: #2a7a3a; }
+.social-card.phone-call.cs { background: #1f6f9f; }
 
 .fb-embed-wrap {
-  display: flex;
-  justify-content: center;
   background: #fafafa;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 0.75rem;
+  padding: 0;
+  overflow: hidden;
+  /* lock to standard FB plugin aspect ratio so the iframe fills the card */
+  position: relative;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  height: 720px;
+}
+.fb-embed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* -------------------- Room detail page -------------------- */
+.room-detail { padding: 0 0 2rem; }
+.room-detail-header { margin-bottom: 1.25rem; }
+
+/* Hero gallery: large feature photo + 2x2 grid of side photos. */
+.media-gallery {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  border-radius: 14px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  max-height: 540px;
+}
+.media-hero {
+  background: #f1ebeb center/cover no-repeat;
+  border-radius: 0;
+  display: block;
+}
+.media-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 0.5rem;
+}
+.media-tile {
+  background: #f1ebeb center/cover no-repeat;
+  display: block;
+  min-height: 0;
+}
+.media-tile-empty { background: #f5efef; }
+
+@media (max-width: 720px) {
+  .media-gallery {
+    grid-template-columns: 1fr;
+    aspect-ratio: 4 / 3;
+    max-height: 360px;
+  }
+  .media-side { display: none; }
+}
+
+.photo-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.video-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.video-tile { border-radius: 10px; overflow: hidden; }
+.video-tile iframe, .video-tile video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: block;
+  border: 0;
+}
+
+/* Two-column page layout: room info on the left, sticky booking form on the right. */
+.room-detail-grid {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+.room-detail-aside { position: sticky; top: 1rem; }
+.booking-form-card { padding: 1rem 1.1rem; }
+.booking-form-card h2 { font-size: 1.1rem; margin: 0 0 0.6rem; }
+.booking-form-card label { font-size: 0.82rem; }
+.booking-form-card input,
+.booking-form-card select,
+.booking-form-card textarea { padding: 0.4rem 0.55rem; font-size: 0.92rem; }
+.booking-form-card .grid.cols-2.details-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem 0.85rem; }
+
+@media (max-width: 900px) {
+  .room-detail-grid { grid-template-columns: 1fr; }
+  .room-detail-aside { position: static; }
+  .booking-form-card .grid.cols-2.details-grid { grid-template-columns: 1fr; }
 }
 
 .trust-strip {

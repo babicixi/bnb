@@ -105,7 +105,7 @@ export function createApp(opts: CreateAppOptions = {}): {
   mountBookingRoutes(app, repo, uploadsDir);
   mountAdminRoutes(app, repo, uploadsDir);
   mountAgentRoutes(app, repo);
-  mountCleaningRoutes(app, repo);
+  mountCleaningRoutes(app, repo, uploadsDir);
 
   app.use((_req, res) => {
     res

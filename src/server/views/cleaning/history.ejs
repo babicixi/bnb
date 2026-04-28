@@ -1,0 +1,107 @@
+<%- include('../_header') %>
+<h1>My history <span class="muted-small">· <%= user.fullName %></span></h1>
+<p>
+  <a href="/cleaning">← My jobs</a>
+  · <a href="/cleaning/availability/me">My availability</a>
+</p>
+
+<div class="card">
+  <p class="muted-small" style="margin:0;">
+    Fixed pay per job: <strong><%= profile ? formatVnd(profile.fixedPayPerJobVnd) : '—' %></strong>
+    · lifetime: <%= lifetimeJobs %> jobs · earned <strong><%= formatVnd(lifetimeEarned) %></strong> · paid <strong><%= formatVnd(lifetimePaid) %></strong>
+    · outstanding <strong><%= formatVnd(Math.max(0, lifetimeEarned - lifetimePaid)) %></strong>
+  </p>
+</div>
+
+<div class="card">
+  <h2>Weekly earnings & payments</h2>
+  <% if (weeklyRows.length === 0) { %>
+    <p class="muted">No weeks with activity yet.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Week of</th>
+            <th>Jobs completed</th>
+            <th>Earned</th>
+            <th>Paid</th>
+            <th>Outstanding</th>
+            <th>Bank-transfer screenshots</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% weeklyRows.forEach(function(w){
+               var outstanding = Math.max(0, w.earnedVnd - w.paidAmountVnd);
+          %>
+            <tr>
+              <td>
+                <strong><%= w.weekStartIso %></strong>
+                <% if (outstanding > 0) { %><br><span class="badge bad"><%= formatVnd(outstanding) %> due</span>
+                <% } else if (w.earnedVnd > 0) { %><br><span class="badge good">paid</span><% } %>
+              </td>
+              <td><%= w.jobsCompleted %></td>
+              <td><%= formatVnd(w.earnedVnd) %></td>
+              <td><%= formatVnd(w.paidAmountVnd) %></td>
+              <td>
+                <% if (outstanding > 0) { %>
+                  <span class="badge bad"><%= formatVnd(outstanding) %></span>
+                <% } else if (w.earnedVnd > 0) { %>
+                  <span class="badge good">paid</span>
+                <% } else { %>
+                  —
+                <% } %>
+              </td>
+              <td>
+                <% if (w.payments.length === 0) { %>
+                  <span class="muted-small">—</span>
+                <% } else { %>
+                  <% w.payments.forEach(function(p){ var isVoid = p.status === 'void'; %>
+                    <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.25rem; <%= isVoid ? 'opacity:0.5;' : '' %>">
+                      <% if (p.screenshotUrl) { %>
+                        <a href="<%= p.screenshotUrl %>" target="_blank" title="<%= formatVnd(p.amountVnd) %> · <%= p.jobsCount %> jobs · <%= formatDateTime(p.paidAt) %><% if (p.notes) { %> · <%= p.notes %><% } %>">
+                          <img src="<%= p.screenshotUrl %>" alt="proof" style="height:42px; vertical-align:middle; border:1px solid var(--border); border-radius:3px;" />
+                        </a>
+                      <% } else { %>
+                        <span class="muted-small" title="<%= formatDateTime(p.paidAt) %>"><%= formatVnd(p.amountVnd) %></span>
+                      <% } %>
+                      <span class="badge <%= isVoid ? 'bad' : 'good' %>"><%= isVoid ? 'voided' : 'paid' %></span>
+                    </div>
+                  <% }) %>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted-small" style="margin-top:0.6rem;">
+      Disagree with anything? Message a manager — they can correct payments and re-upload screenshots from their side.
+    </p>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>Recent jobs (last 12)</h2>
+  <% if (recentJobs.length === 0) { %>
+    <p class="muted">No jobs yet.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>When</th><th>Room</th><th>Booking</th><th>Status</th><th>Pay</th></tr></thead>
+      <tbody>
+        <% recentJobs.forEach(function(j){
+             var b = bookingForJob(j); var r = roomForJob(j);
+        %>
+          <tr>
+            <td><%= formatDateTime(j.windowStartAt) %></td>
+            <td><%= r ? r.name : '—' %></td>
+            <td><%= b ? b.bookingNumber : '—' %></td>
+            <td><span class="badge <%= j.status === 'completed' ? 'good' : '' %>"><%= j.status %></span></td>
+            <td><%= formatVnd(j.fixedPayVnd) %> · <a href="/cleaning/<%= j.id %>">open</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+<%- include('../_footer') %>

@@ -1,17 +1,21 @@
 <%- include('../_header') %>
 <h1>Cleaning job</h1>
 <p><a href="/cleaning">← Back to my jobs</a></p>
+
+<% if (flash) { %><p class="success">✓ <%= flash %></p><% } %>
+<% if (flashError) { %><p class="error">✗ <%= flashError %></p><% } %>
+
 <div class="card">
   <p>Status: <span class="badge"><%= job.status %></span></p>
   <p>Room: <%= room && room.name %></p>
   <p>Window: <%= formatDateTime(job.windowStartAt) %> – <%= formatDateTime(job.windowEndAt) %></p>
   <p>Booking: <%= booking ? booking.bookingNumber : '—' %></p>
-  <p>Fixed pay for this job: <%= formatVnd(job.fixedPayVnd) %></p>
+  <p>Fixed pay for this job: <strong><%= formatVnd(job.fixedPayVnd) %></strong></p>
 </div>
 
 <div class="card">
   <h2>Status</h2>
-  <div class="flex-row">
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
     <% if (job.status === 'assigned') { %>
       <form method="post" action="/cleaning/<%= job.id %>/arrived"><button>Mark arrived</button></form>
     <% } %>
@@ -25,16 +29,49 @@
 </div>
 
 <div class="card">
-  <h2>Report minibar usage</h2>
-  <form method="post" action="/cleaning/<%= job.id %>/minibar">
-    <label>Item</label>
-    <select name="itemId">
-      <% minibarItems.forEach(function(i){ %><option value="<%= i.id %>"><%= i.name %> (<%= formatVnd(i.unitPriceVnd) %>)</option><% }) %>
-    </select>
-    <label>Quantity</label>
-    <input type="number" name="quantity" min="1" value="1" />
-    <p><button type="submit">Add usage</button></p>
-  </form>
+  <h2>Minibar usage <span class="muted-small">· total so far <%= formatVnd((booking && booking.minibarChargesVnd) || 0) %></span></h2>
+
+  <% if (recordedUsages.length === 0) { %>
+    <p class="muted-small">Nothing reported yet.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>When</th><th>Item</th><th>Qty</th><th>Total</th></tr></thead>
+      <tbody>
+        <% recordedUsages.forEach(function(u){ var item = minibarItemById(u.minibarItemId); %>
+          <tr>
+            <td><%= formatDateTime(u.createdAt) %></td>
+            <td><%= item ? item.name : u.minibarItemId %></td>
+            <td><%= u.quantity %></td>
+            <td><%= formatVnd(u.totalVnd) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+
+  <% if (minibarItems.length === 0) { %>
+    <p class="muted-small" style="background:#fff5e6; padding:0.5rem 0.75rem; border-radius:4px; border:1px solid #f0d4a8; margin-top:0.75rem;">
+      No active minibar items configured. Ask the manager to add some on the <strong>Minibar</strong> admin tab before reporting usage.
+    </p>
+  <% } else { %>
+    <form method="post" action="/cleaning/<%= job.id %>/minibar" style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+      <div style="flex:1 1 220px;">
+        <label>Item</label>
+        <select name="itemId" required>
+          <% minibarItems.forEach(function(i){ %>
+            <option value="<%= i.id %>"><%= i.name %> (<%= formatVnd(i.unitPriceVnd) %>)</option>
+          <% }) %>
+        </select>
+      </div>
+      <div style="flex:0 0 100px;">
+        <label>Quantity</label>
+        <input type="number" name="quantity" min="1" value="1" required />
+      </div>
+      <div style="flex:0 0 auto;">
+        <button type="submit">Add usage</button>
+      </div>
+    </form>
+  <% } %>
 </div>
 
 <div class="card">
@@ -46,18 +83,26 @@
     <textarea name="notes" rows="2"></textarea>
     <p><button type="submit" class="danger">Add damage report</button></p>
   </form>
-  <% if (job.damageNotes) { %><p>Existing notes: <%= job.damageNotes %></p><% } %>
+  <% if (job.damageNotes) { %><p class="muted-small">Existing notes: <%= job.damageNotes %></p><% } %>
 </div>
 
 <div class="card">
   <h2>Photos</h2>
-  <form method="post" action="/cleaning/<%= job.id %>/photo" class="flex-row">
-    <input type="url" name="photoUrl" placeholder="https://..." style="max-width:480px" required />
-    <button type="submit">Add URL</button>
+  <form method="post" action="/cleaning/<%= job.id %>/photo" enctype="multipart/form-data">
+    <label>Upload from your phone (you can pick several)</label>
+    <input type="file" name="photoFiles" accept="image/*" multiple />
+    <label class="muted-small" style="margin-top:0.6rem;">Or paste a public URL</label>
+    <input type="url" name="photoUrl" placeholder="https://..." />
+    <p><button type="submit">Add photos</button></p>
   </form>
-  <p class="muted-small">File-storage upload not wired — paste a URL for now.</p>
   <% if (job.photoUrls && job.photoUrls.length) { %>
-    <ul><% job.photoUrls.forEach(function(u){ %><li><a href="<%= u %>" target="_blank"><%= u %></a></li><% }) %></ul>
+    <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.75rem;">
+      <% job.photoUrls.forEach(function(u){ %>
+        <a href="<%= u %>" target="_blank" class="image-thumb">
+          <img src="<%= u %>" alt="cleaning photo" style="height:90px; border:1px solid var(--border); border-radius:4px;" />
+        </a>
+      <% }) %>
+    </div>
   <% } %>
 </div>
 <%- include('../_footer') %>

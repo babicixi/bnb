@@ -1,132 +1,189 @@
-<%- include('_header') %>
-<h1><%= room.name %></h1>
-<p class="muted"><%= building && building.name %> · Room <%= room.roomNumber %> · up to <%= room.maxGuests %> guests</p>
-<p>Day rate: <strong><%= formatVnd(room.baseDayRateVnd) %></strong> · Hourly: <%= formatVnd(room.baseHourlyRateVnd) %></p>
+<%- include('_header', { bodyClass: 'wide-page' }) %>
 
-<% if (room.photoUrls && room.photoUrls.length) { %>
-  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
-    <% room.photoUrls.forEach(function(u){ %>
-      <a href="<%= u %>" target="_blank" class="image-thumb"><img src="<%= u %>" alt="<%= room.name %>" /></a>
-    <% }) %>
-  </div>
-<% } %>
+<div class="room-detail">
 
-<% if (room.videoUrls && room.videoUrls.length) { %>
-  <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
-    <% room.videoUrls.forEach(function(u){ %>
-      <%- videoEmbed(u) %>
-    <% }) %>
-  </div>
-<% } %>
-
-<% if (room.description) { %><p><%= room.description %></p><% } %>
-
-<% if (room.features && room.features.length) { %>
-  <p><strong>Features:</strong>
-    <% room.features.forEach(function(f, i){ %>
-      <span class="badge" style="margin-right:0.25rem;"><%= f %></span>
-    <% }) %>
-  </p>
-<% } %>
-
-<%
-  // Generate 30-minute time slots in 24-hour format.
-  const timeOptions = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      const v = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-      timeOptions.push(v);
-    }
-  }
-%>
-
-<%
-  const hourlyEnabled = room.hourlyEnabled !== false;
-%>
-<div class="card">
-  <h2>Book this room</h2>
-  <% if (!hourlyEnabled) { %>
-    <p class="muted-small" style="background:#fff5e6; padding:0.5rem 0.75rem; border-radius:4px; border:1px solid #f0d4a8;">
-      This room is available for <strong>nightly stays only</strong>. Pick different dates for check-in and check-out.
+  <div class="room-detail-header">
+    <h1 style="margin:0;"><%= room.name %></h1>
+    <p class="muted" style="margin:0.3rem 0 0;">
+      <%= building && building.name %><% if (room.roomNumber) { %> · room <%= room.roomNumber %><% } %>
+      · up to <%= room.maxGuests %> guests
     </p>
-  <% } %>
-  <% if (error) { %><p class="error"><%= error %></p><% } %>
-  <form method="post" action="/book/hold">
-    <input type="hidden" name="roomId" value="<%= room.id %>" />
+  </div>
 
-    <div class="grid cols-2 booking-times">
-      <div>
-        <label><%= t('booking.checkin_date') %></label>
-        <input type="date" id="bf-checkInDate" name="checkInDate" required />
-      </div>
-      <% if (hourlyEnabled) { %>
-        <div>
-          <label><%= t('booking.checkin_time') %></label>
-          <select id="bf-checkInTime" name="checkInTime" required>
-            <% timeOptions.forEach(function(v){ %>
-              <option value="<%= v %>" <%= v === '14:00' ? 'selected' : '' %>><%= v %></option>
-            <% }) %>
-          </select>
+  <%
+    const photos = room.photoUrls || [];
+    const videos = room.videoUrls || [];
+    const heroPhoto = photos[0];
+    const sidePhotos = photos.slice(1, 5);
+  %>
+
+  <% if (photos.length || videos.length) { %>
+    <% if (heroPhoto) { %>
+      <div class="media-gallery">
+        <a class="media-hero" href="<%= heroPhoto %>" target="_blank" style="background-image: url('<%= heroPhoto %>');"></a>
+        <div class="media-side">
+          <% sidePhotos.forEach(function(u, i){ %>
+            <a class="media-tile" href="<%= u %>" target="_blank" style="background-image: url('<%= u %>');"></a>
+          <% }) %>
+          <% var fillSlots = 4 - sidePhotos.length; for (var i = 0; i < fillSlots; i++) { %>
+            <div class="media-tile media-tile-empty"></div>
+          <% } %>
         </div>
-      <% } else { %>
-        <div>
-          <label class="muted-small">Standard check-in</label>
-          <p style="margin:0.55rem 0 0;"><strong>14:00</strong></p>
-          <input type="hidden" id="bf-checkInTime" name="checkInTime" value="14:00" />
+      </div>
+      <% if (photos.length > 5) { %>
+        <p class="muted-small" style="margin:0.4rem 0 1rem;">+<%= photos.length - 5 %> more photos — open any image to see full size.</p>
+      <% } %>
+    <% } else if (photos.length) { %>
+      <div class="photo-row">
+        <% photos.forEach(function(u){ %>
+          <a href="<%= u %>" target="_blank" class="image-thumb"><img src="<%= u %>" alt="<%= room.name %>" /></a>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <% if (videos.length) { %>
+      <div class="video-row">
+        <% videos.forEach(function(u){ %>
+          <div class="video-tile"><%- videoEmbed(u) %></div>
+        <% }) %>
+      </div>
+    <% } %>
+  <% } %>
+
+  <div class="room-detail-grid">
+    <div class="room-detail-main">
+      <div class="card">
+        <p style="margin:0;">
+          <strong style="font-size:1.25rem;"><%= formatVnd(room.baseDayRateVnd) %></strong>
+          <span class="muted-small">/ night</span>
+          <% if (room.hourlyEnabled !== false) { %>
+            <span class="muted-small"> · or <%= formatVnd(room.baseHourlyRateVnd) %>/hour</span>
+          <% } %>
+        </p>
+      </div>
+
+      <% if (room.description) { %>
+        <div class="card">
+          <h2>About this place</h2>
+          <p><%= room.description %></p>
         </div>
       <% } %>
-      <div>
-        <label><%= t('booking.checkout_date') %></label>
-        <input type="date" id="bf-checkOutDate" name="checkOutDate" required />
-      </div>
-      <% if (hourlyEnabled) { %>
-        <div>
-          <label><%= t('booking.checkout_time') %></label>
-          <select id="bf-checkOutTime" name="checkOutTime" required>
-            <% timeOptions.forEach(function(v){ %>
-              <option value="<%= v %>" <%= v === '11:00' ? 'selected' : '' %>><%= v %></option>
+
+      <% if (room.features && room.features.length) { %>
+        <div class="card">
+          <h2>Features</h2>
+          <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+            <% room.features.forEach(function(f){ %>
+              <span class="tag" style="background:#f5efef; color:#5b3030; font-size:0.85rem; padding:0.25rem 0.6rem; border-radius:999px;"><%= f %></span>
             <% }) %>
-          </select>
-        </div>
-      <% } else { %>
-        <div>
-          <label class="muted-small">Standard check-out</label>
-          <p style="margin:0.55rem 0 0;"><strong>11:00</strong></p>
-          <input type="hidden" id="bf-checkOutTime" name="checkOutTime" value="11:00" />
+          </div>
         </div>
       <% } %>
     </div>
 
-    <div id="bf-availability" class="availability-banner empty">Pick check-in and check-out to see availability.</div>
+    <aside class="room-detail-aside">
+      <%
+        const timeOptions = [];
+        for (let h = 0; h < 24; h++) {
+          for (let m = 0; m < 60; m += 30) {
+            const v = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+            timeOptions.push(v);
+          }
+        }
+        const hourlyEnabled = room.hourlyEnabled !== false;
+      %>
+      <div class="card booking-form-card">
+        <h2 style="margin-top:0;">Reserve</h2>
+        <% if (!hourlyEnabled) { %>
+          <p class="muted-small" style="background:#fff5e6; padding:0.5rem 0.75rem; border-radius:4px; border:1px solid #f0d4a8;">
+            Nightly stays only. Pick different dates for check-in and check-out.
+          </p>
+        <% } %>
+        <% if (error) { %><p class="error"><%= error %></p><% } %>
+        <form method="post" action="/book/hold">
+          <input type="hidden" name="roomId" value="<%= room.id %>" />
 
-    <p class="muted-small">
-      <% if (hourlyEnabled) { %>
-        Booking type is detected automatically: same day → hourly · different days → day / multi-day.
-        Day &amp; multi-day check-in must be at or after 14:00; standard check-out is 11:00.
-        An hourly stay that crosses midnight becomes a day rate.<br>
-        <strong>Late check-out:</strong> 11:00–12:00 free. 12:00–14:00 = 2-hour tier · 14:00–16:00 = 4-hour tier · 16:00–18:00 = 6-hour tier (rounded up). After 18:00 you're billed for an extra full day.
-      <% } else { %>
-        Standard check-in 14:00, check-out 11:00. Pick a check-out date later than check-in.<br>
-        <strong>Late check-out:</strong> 11:00–12:00 free. 12:00–18:00 = hourly tier (rounded up to 2/4/6 h). After 18:00 = extra full day.
-      <% } %>
-    </p>
+          <div class="grid cols-2 booking-times">
+            <div>
+              <label><%= t('booking.checkin_date') %></label>
+              <input type="date" id="bf-checkInDate" name="checkInDate" required />
+            </div>
+            <% if (hourlyEnabled) { %>
+              <div>
+                <label><%= t('booking.checkin_time') %></label>
+                <select id="bf-checkInTime" name="checkInTime" required>
+                  <% timeOptions.forEach(function(v){ %>
+                    <option value="<%= v %>" <%= v === '14:00' ? 'selected' : '' %>><%= v %></option>
+                  <% }) %>
+                </select>
+              </div>
+            <% } else { %>
+              <div>
+                <label class="muted-small">Standard check-in</label>
+                <p style="margin:0.55rem 0 0;"><strong>14:00</strong></p>
+                <input type="hidden" id="bf-checkInTime" name="checkInTime" value="14:00" />
+              </div>
+            <% } %>
+            <div>
+              <label><%= t('booking.checkout_date') %></label>
+              <input type="date" id="bf-checkOutDate" name="checkOutDate" required />
+            </div>
+            <% if (hourlyEnabled) { %>
+              <div>
+                <label><%= t('booking.checkout_time') %></label>
+                <select id="bf-checkOutTime" name="checkOutTime" required>
+                  <% timeOptions.forEach(function(v){ %>
+                    <option value="<%= v %>" <%= v === '11:00' ? 'selected' : '' %>><%= v %></option>
+                  <% }) %>
+                </select>
+              </div>
+            <% } else { %>
+              <div>
+                <label class="muted-small">Standard check-out</label>
+                <p style="margin:0.55rem 0 0;"><strong>11:00</strong></p>
+                <input type="hidden" id="bf-checkOutTime" name="checkOutTime" value="11:00" />
+              </div>
+            <% } %>
+          </div>
 
-    <h3>Your details</h3>
-    <label><%= t('booking.guest_name') %></label>
-    <input type="text" name="guestName" required />
-    <label><%= t('booking.phone') %></label>
-    <input type="tel" name="guestPhone" required />
-    <label><%= t('booking.email_required') %></label>
-    <input type="email" name="guestEmail" required />
-    <label><%= t('booking.facebook') %></label>
-    <input type="text" name="guestFacebook" placeholder="facebook.com/yourname or @handle" />
-    <label><%= t('booking.instagram') %></label>
-    <input type="text" name="guestInstagram" placeholder="@yourhandle" />
-    <label><%= t('booking.notes') %></label>
-    <textarea name="notes" rows="2"></textarea>
+          <div id="bf-availability" class="availability-banner empty">Pick check-in and check-out to see availability.</div>
 
-    <p><button id="bf-submit" type="submit"><%= t('booking.reserve') %></button></p>
-  </form>
+          <p class="muted-small" style="margin-top:0.6rem;">
+            <% if (hourlyEnabled) { %>
+              Same day → hourly · different days → day / multi-day. Day &amp; multi-day check-in must be at or after 14:00.<br>
+              <strong>Late check-out:</strong> 11:00–12:00 free · 12:00–14:00 = 2h tier · 14:00–16:00 = 4h tier · 16:00–18:00 = 6h tier (rounded up). After 18:00 = extra full day.
+            <% } else { %>
+              Standard check-in 14:00, check-out 11:00.<br>
+              <strong>Late check-out:</strong> 11:00–12:00 free · 12:00–18:00 = hourly tier rounded up to 2/4/6h. After 18:00 = extra full day.
+            <% } %>
+          </p>
+
+          <h3 style="margin: 1.25rem 0 0.4rem;">Your details</h3>
+          <div class="grid cols-2 details-grid">
+            <div>
+              <label><%= t('booking.guest_name') %></label>
+              <input type="text" name="guestName" required />
+              <label><%= t('booking.phone') %></label>
+              <input type="tel" name="guestPhone" required />
+              <label><%= t('booking.email_required') %></label>
+              <input type="email" name="guestEmail" required />
+            </div>
+            <div>
+              <label><%= t('booking.facebook') %></label>
+              <input type="text" name="guestFacebook" placeholder="facebook.com/yourname or @handle" />
+              <label><%= t('booking.instagram') %></label>
+              <input type="text" name="guestInstagram" placeholder="@yourhandle" />
+              <label><%= t('booking.notes') %></label>
+              <textarea name="notes" rows="3"></textarea>
+            </div>
+          </div>
+
+          <p style="margin-top:1rem;"><button id="bf-submit" type="submit"><%= t('booking.reserve') %></button></p>
+        </form>
+      </div>
+    </aside>
+  </div>
+
 </div>
 
 <script>
@@ -139,9 +196,6 @@
   var banner = document.getElementById('bf-availability');
   var submit = document.getElementById('bf-submit');
   function fmtVnd(n){ return new Intl.NumberFormat('vi-VN').format(n) + ' ₫'; }
-  function fields(){
-    return [ci.value, cit.value, co.value, cot.value];
-  }
   function compose(d, t){ return d && t ? d + 'T' + t : ''; }
   var debounce;
   var ctrl;

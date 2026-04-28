@@ -1,4 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import { Router, type Express } from "express";
+import multer from "multer";
 import { z } from "zod";
 import {
   addCleaningPhoto,
@@ -13,7 +16,34 @@ import { requireRole, type RequestWithUser } from "../middleware/auth.js";
 import { notify } from "../../services/notifications.js";
 import { parseVietnamLocal } from "../parseTime.js";
 
-export function mountCleaningRoutes(app: Express, repo: Repository): void {
+export function mountCleaningRoutes(
+  app: Express,
+  repo: Repository,
+  uploadsDir: string,
+): void {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (_req, file, cb) => {
+      const safe = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+      cb(
+        null,
+        `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`,
+      );
+    },
+  });
+  const photoUpload = multer({
+    storage,
+    limits: { fileSize: 12 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (!/^image\//.test(file.mimetype)) {
+        cb(new Error("Only image uploads are allowed."));
+        return;
+      }
+      cb(null, true);
+    },
+  });
+
   const router = Router();
   router.use(requireRole("cleaning_crew", "admin", "manager"));
 
@@ -56,12 +86,20 @@ export function mountCleaningRoutes(app: Express, repo: Repository): void {
     const minibarItems = Array.from(repo.minibarItems.values()).filter(
       (i) => i.isActive,
     );
+    const recordedUsages = repo.minibarUsage
+      .filter((u) => u.bookingId === job.bookingId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     res.render("cleaning/job", {
       title: `Cleaning job ${job.id}`,
       job,
       booking,
       room,
       minibarItems,
+      recordedUsages,
+      minibarItemById: (id: string) => repo.minibarItems.get(id),
+      flash: typeof req.query.flash === "string" ? req.query.flash : "",
+      flashError:
+        typeof req.query.error === "string" ? req.query.error : "",
     });
   });
 
@@ -115,31 +153,42 @@ export function mountCleaningRoutes(app: Express, repo: Repository): void {
     if (!job) return;
     const parsed = minibarSchema.safeParse(req.body);
     if (!parsed.success) {
-      res
-        .status(400)
-        .render("error", { title: "Invalid minibar entry", message: "" });
+      res.redirect(
+        `/cleaning/${job.id}?error=${encodeURIComponent("Pick an item and a quantity ≥ 1.")}`,
+      );
       return;
     }
     const booking = repo.bookings.get(job.bookingId);
-    if (!booking) return;
-    const item = repo.minibarItems.get(parsed.data.itemId);
-    if (!item) {
-      res
-        .status(400)
-        .render("error", { title: "Unknown minibar item", message: "" });
+    if (!booking) {
+      res.redirect(`/cleaning/${job.id}?error=Booking+missing`);
       return;
     }
-    const usage = reportMinibarUsage({
-      id: nextId("minibar-usage"),
-      job,
-      booking,
-      item,
-      quantity: parsed.data.quantity,
-      user: r.currentUser!,
-    });
-    repo.minibarUsage.push(usage);
-    notify("minibar_reported", { bookingId: booking.id });
-    res.redirect(`/cleaning/${job.id}`);
+    const item = repo.minibarItems.get(parsed.data.itemId);
+    if (!item) {
+      res.redirect(
+        `/cleaning/${job.id}?error=${encodeURIComponent("Unknown minibar item.")}`,
+      );
+      return;
+    }
+    try {
+      const usage = reportMinibarUsage({
+        id: nextId("minibar-usage"),
+        job,
+        booking,
+        item,
+        quantity: parsed.data.quantity,
+        user: r.currentUser!,
+      });
+      repo.minibarUsage.push(usage);
+      notify("minibar_reported", { bookingId: booking.id });
+      res.redirect(
+        `/cleaning/${job.id}?flash=${encodeURIComponent(`Recorded ${parsed.data.quantity} × ${item.name}`)}`,
+      );
+    } catch (err) {
+      res.redirect(
+        `/cleaning/${job.id}?error=${encodeURIComponent((err as Error).message)}`,
+      );
+    }
   });
 
   const damageSchema = z.object({
@@ -171,17 +220,133 @@ export function mountCleaningRoutes(app: Express, repo: Repository): void {
     res.redirect(`/cleaning/${job.id}`);
   });
 
-  router.post("/:id/photo", (req, res) => {
-    const r = req as RequestWithUser;
-    const job = loadJobOr404(r, res);
-    if (!job) return;
-    const url = String(req.body.photoUrl ?? "").trim();
-    if (!url) {
-      res.status(400).render("error", { title: "Missing URL", message: "" });
+  router.post(
+    "/:id/photo",
+    photoUpload.array("photoFiles", 8),
+    (req, res) => {
+      const r = req as RequestWithUser;
+      const job = loadJobOr404(r, res);
+      if (!job) return;
+      const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+      const urlFromForm = String(req.body.photoUrl ?? "").trim();
+      const urls: string[] = [];
+      for (const f of files) urls.push(`/uploads/${path.basename(f.path)}`);
+      if (urlFromForm) urls.push(urlFromForm);
+      if (urls.length === 0) {
+        res.redirect(
+          `/cleaning/${job.id}?error=${encodeURIComponent("Pick at least one photo (file or URL).")}`,
+        );
+        return;
+      }
+      try {
+        for (const u of urls) {
+          addCleaningPhoto({ job, user: r.currentUser!, photoUrl: u });
+        }
+        res.redirect(
+          `/cleaning/${job.id}?flash=${encodeURIComponent(`Added ${urls.length} photo(s)`)}`,
+        );
+      } catch (err) {
+        res.redirect(
+          `/cleaning/${job.id}?error=${encodeURIComponent((err as Error).message)}`,
+        );
+      }
+    },
+  );
+
+  router.get("/me/history", (req, res) => {
+    const user = (req as RequestWithUser).currentUser!;
+    if (user.role !== "cleaning_crew") {
+      res.status(403).render("error", { title: "Forbidden", message: "" });
       return;
     }
-    addCleaningPhoto({ job, user: r.currentUser!, photoUrl: url });
-    res.redirect(`/cleaning/${job.id}`);
+    const profile = repo.cleaningCrewProfiles.get(user.id);
+    const jobs = Array.from(repo.cleaningJobs.values()).filter(
+      (j) => j.assignedToUserId === user.id,
+    );
+    const payments = repo.cleanerPayments.filter(
+      (p) => p.cleanerUserId === user.id,
+    );
+
+    // Bucket by Mon-aligned ISO week of the job completedAt date.
+    function isoMondayOf(d: Date): string {
+      const day = d.getUTCDay();
+      const diff = day === 0 ? 6 : day - 1;
+      const monday = new Date(
+        Date.UTC(
+          d.getUTCFullYear(),
+          d.getUTCMonth(),
+          d.getUTCDate() - diff,
+        ),
+      );
+      return monday.toISOString().slice(0, 10);
+    }
+    type Row = {
+      weekStartIso: string;
+      jobsCompleted: number;
+      earnedVnd: number;
+      paidAmountVnd: number;
+      payments: typeof payments;
+    };
+    const buckets = new Map<string, Row>();
+    const get = (wk: string): Row => {
+      let row = buckets.get(wk);
+      if (!row) {
+        row = {
+          weekStartIso: wk,
+          jobsCompleted: 0,
+          earnedVnd: 0,
+          paidAmountVnd: 0,
+          payments: [],
+        };
+        buckets.set(wk, row);
+      }
+      return row;
+    };
+    for (const j of jobs) {
+      if (j.status !== "completed" || !j.completedAt) continue;
+      const row = get(isoMondayOf(j.completedAt));
+      row.jobsCompleted += 1;
+      row.earnedVnd += j.fixedPayVnd;
+    }
+    for (const p of payments) {
+      const row = get(p.weekStartIso);
+      if (p.status !== "void") row.paidAmountVnd += p.amountVnd;
+      row.payments.push(p);
+    }
+    const thisWeek = isoMondayOf(new Date());
+    if (!buckets.has(thisWeek)) get(thisWeek);
+    const weeklyRows = Array.from(buckets.values()).sort((a, b) =>
+      b.weekStartIso.localeCompare(a.weekStartIso),
+    );
+    for (const r of weeklyRows) {
+      r.payments.sort((x, y) => y.paidAt.getTime() - x.paidAt.getTime());
+    }
+
+    const lifetimeJobs = weeklyRows.reduce((s, r) => s + r.jobsCompleted, 0);
+    const lifetimeEarned = weeklyRows.reduce((s, r) => s + r.earnedVnd, 0);
+    const lifetimePaid = weeklyRows.reduce(
+      (s, r) => s + r.paidAmountVnd,
+      0,
+    );
+
+    const recentJobs = jobs
+      .slice()
+      .sort((a, b) => b.windowStartAt.getTime() - a.windowStartAt.getTime())
+      .slice(0, 12);
+
+    res.render("cleaning/history", {
+      title: "My history",
+      user,
+      profile,
+      weeklyRows,
+      lifetimeJobs,
+      lifetimeEarned,
+      lifetimePaid,
+      recentJobs,
+      bookingForJob: (j: { bookingId: string }) =>
+        repo.bookings.get(j.bookingId),
+      roomForJob: (j: { roomId: string }) => repo.rooms.get(j.roomId),
+    });
   });
 
   router.get("/availability/me", (req, res) => {
