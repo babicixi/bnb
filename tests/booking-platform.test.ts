@@ -306,13 +306,77 @@ describe("pricing", () => {
     const price = calculateBookingPrice({
       bookingType: "multi_day",
       checkInAt: d("2026-05-01T15:00:00+07:00"),
-      checkOutAt: d("2026-05-03T18:00:00+07:00"),
+      checkOutAt: d("2026-05-03T11:00:00+07:00"),
       room,
       rates,
     });
 
     expect(price.checkOutAt).toEqual(d("2026-05-03T11:00:00+07:00"));
     expect(price.roomChargeVnd).toBe(2_200_000);
+    expect(price.lateCheckoutFeeVnd).toBe(0);
+  });
+
+  it("day booking with checkout 14:00 next day adds 2h late-checkout tier", () => {
+    const price = calculateBookingPrice({
+      bookingType: "day",
+      checkInAt: d("2026-05-01T14:00:00+07:00"),
+      checkOutAt: d("2026-05-02T14:00:00+07:00"),
+      room,
+      rates,
+    });
+
+    expect(price.bookingType).toBe("day");
+    expect(price.checkOutAt).toEqual(d("2026-05-02T14:00:00+07:00"));
+    // 1 night day rate + 2h tier (no baseHourlyTiers → falls back to 2h * hourlyRateVnd)
+    expect(price.lateCheckoutFeeVnd).toBe(300_000);
+    expect(price.roomChargeVnd).toBe(1_300_000);
+  });
+
+  it("day booking with checkout 18:00 next day adds 6h late-checkout tier", () => {
+    const price = calculateBookingPrice({
+      bookingType: "day",
+      checkInAt: d("2026-05-01T14:00:00+07:00"),
+      checkOutAt: d("2026-05-02T18:00:00+07:00"),
+      room,
+      rates,
+    });
+
+    expect(price.bookingType).toBe("day");
+    expect(price.checkOutAt).toEqual(d("2026-05-02T18:00:00+07:00"));
+    // 6h * 150k = 900k late fee on top of 1M day rate
+    expect(price.lateCheckoutFeeVnd).toBe(900_000);
+    expect(price.roomChargeVnd).toBe(1_900_000);
+  });
+
+  it("day booking with checkout after 18:00 promotes to multi-day (extra night)", () => {
+    const price = calculateBookingPrice({
+      bookingType: "day",
+      checkInAt: d("2026-05-01T14:00:00+07:00"),
+      checkOutAt: d("2026-05-02T21:00:00+07:00"),
+      room,
+      rates,
+    });
+
+    expect(price.bookingType).toBe("multi_day");
+    // checkout pushed to 11:00 the day AFTER the requested day
+    expect(price.checkOutAt).toEqual(d("2026-05-03T11:00:00+07:00"));
+    expect(price.lateCheckoutFeeVnd).toBe(0);
+    // 2 nights: rates for May 1 + May 2
+    expect(price.roomChargeVnd).toBe(2_200_000);
+  });
+
+  it("day booking with checkout 11:30 next day is within free grace hour", () => {
+    const price = calculateBookingPrice({
+      bookingType: "day",
+      checkInAt: d("2026-05-01T14:00:00+07:00"),
+      checkOutAt: d("2026-05-02T11:30:00+07:00"),
+      room,
+      rates,
+    });
+
+    // hour past noon ≤ 0 → no late fee
+    expect(price.lateCheckoutFeeVnd).toBe(0);
+    expect(price.roomChargeVnd).toBe(1_000_000);
   });
 
   it("global discount applies correctly", () => {

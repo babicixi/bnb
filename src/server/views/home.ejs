@@ -4,37 +4,20 @@
 <section class="hero">
   <div class="hero-inner">
     <h1><%= t('site.tagline') %></h1>
-    <p class="subtitle">Boutique apartments in the heart of Saigon — book by the hour, the day, or the week. Instant confirmation, transparent pricing, no hidden fees.</p>
+    <p class="subtitle">Boutique serviced apartments in Hanoi — book by the hour, the day, or the week. Instant confirmation, transparent pricing, no hidden fees.</p>
     <div class="hero-cta">
       <a href="#rooms" class="btn">Browse rooms</a>
       <a href="/lookup" class="btn secondary">Find my booking</a>
     </div>
-  </div>
-</section>
-
-<section class="section">
-  <h2>Why stay with us</h2>
-  <p class="lede">Designed for travellers who care about details.</p>
-  <div class="trust-strip">
-    <div class="trust-item">
-      <span class="icon">⚡</span>
-      <h3>Instant booking</h3>
-      <p>Pick your room, upload a payment screenshot, and get confirmation in minutes.</p>
-    </div>
-    <div class="trust-item">
-      <span class="icon">⏱️</span>
-      <h3>Hourly or nightly</h3>
-      <p>Need a room for a 6-hour break or a week-long stay? We charge fairly for both.</p>
-    </div>
-    <div class="trust-item">
-      <span class="icon">🧹</span>
-      <h3>Always spotless</h3>
-      <p>Every stay starts with a fresh clean from our trusted local crew.</p>
-    </div>
-    <div class="trust-item">
-      <span class="icon">📍</span>
-      <h3>Central locations</h3>
-      <p>Walking distance from Nguyen Hue, Bui Vien, and the city's best food.</p>
+    <div class="hero-contacts">
+      <a href="tel:0966699738" class="contact-pill">
+        <span class="muted-small" style="opacity:0.85;">Reservations</span><br>
+        <strong>0966.699.738</strong>
+      </a>
+      <a href="tel:0988643307" class="contact-pill">
+        <span class="muted-small" style="opacity:0.85;">Customer service</span><br>
+        <strong>0988.643.307</strong>
+      </a>
     </div>
   </div>
 </section>
@@ -83,8 +66,68 @@
   <% }) %>
 </section>
 
+<section class="section">
+  <h2>Talk to us</h2>
+  <p class="lede">Questions about rooms, dates, or special requests? Pick whichever channel you use most.</p>
+  <div class="social-grid">
+    <a class="social-card facebook" href="https://www.facebook.com/cixi.serviceapartments" target="_blank" rel="noopener">
+      <span class="social-icon" aria-hidden="true">f</span>
+      <div>
+        <strong>Message us on Facebook</strong>
+        <p>cixi.serviceapartments</p>
+      </div>
+    </a>
+    <a class="social-card instagram" href="https://www.instagram.com/cixi.apartment" target="_blank" rel="noopener">
+      <span class="social-icon" aria-hidden="true">📷</span>
+      <div>
+        <strong>DM us on Instagram</strong>
+        <p>@cixi.apartment</p>
+      </div>
+    </a>
+    <a class="social-card tiktok" href="https://www.tiktok.com/@apartmentcixi" target="_blank" rel="noopener">
+      <span class="social-icon" aria-hidden="true">🎵</span>
+      <div>
+        <strong>Watch us on TikTok</strong>
+        <p>@apartmentcixi</p>
+      </div>
+    </a>
+    <a class="social-card phone" href="tel:0988643307">
+      <span class="social-icon" aria-hidden="true">☎</span>
+      <div>
+        <strong>Call customer service</strong>
+        <p>0988.643.307</p>
+      </div>
+    </a>
+  </div>
+</section>
+
+<section class="section">
+  <h2>Latest from our Facebook page</h2>
+  <p class="lede">Recent photos, room updates, and guest moments — straight from facebook.com/cixi.serviceapartments.</p>
+  <div class="fb-embed-wrap">
+    <iframe
+      src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fcixi.serviceapartments&tabs=timeline&width=500&height=600&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=true"
+      width="500" height="600"
+      style="border:none;overflow:hidden; max-width:100%; width:100%;"
+      scrolling="no" frameborder="0" allowfullscreen="true"
+      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+      loading="lazy"></iframe>
+  </div>
+  <p class="muted-small" style="margin-top:0.5rem;">Doesn't load? <a href="https://www.facebook.com/cixi.serviceapartments" target="_blank" rel="noopener">Open our Facebook page in a new tab</a>.</p>
+</section>
+
 <footer class="landing-footer">
-  <p style="margin:0;">© <%= new Date().getFullYear() %> <%= t('site.title') %> · Already booked? <a href="/lookup" style="color:#fff;">Find your reservation</a></p>
+  <p style="margin:0 0 0.5rem;">© <%= new Date().getFullYear() %> Cixi Serviced Apartments · Hanoi</p>
+  <p style="margin:0;">
+    <a href="tel:0966699738" style="color:#fff;">Reservations 0966.699.738</a> ·
+    <a href="tel:0988643307" style="color:#fff;">Customer service 0988.643.307</a> ·
+    <a href="/lookup" style="color:#fff;">Find your reservation</a>
+  </p>
+  <p style="margin:0.6rem 0 0;">
+    <a href="https://www.facebook.com/cixi.serviceapartments" target="_blank" rel="noopener" style="color:#aaa; margin-right:0.75rem;">Facebook</a>
+    <a href="https://www.instagram.com/cixi.apartment" target="_blank" rel="noopener" style="color:#aaa; margin-right:0.75rem;">Instagram</a>
+    <a href="https://www.tiktok.com/@apartmentcixi" target="_blank" rel="noopener" style="color:#aaa;">TikTok</a>
+  </p>
 </footer>
 
 <%- include('_footer') %>

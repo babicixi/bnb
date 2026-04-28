@@ -160,6 +160,8 @@ export function mountBookingRoutes(
         checkInIso: price.checkInAt.toISOString(),
         checkOutIso: price.checkOutAt.toISOString(),
         convertedToDayRate: price.convertedToDayRate,
+        lateCheckoutFeeVnd: price.lateCheckoutFeeVnd,
+        lateCheckoutMinutes: price.lateCheckoutMinutes,
       });
     } catch (err) {
       res.json({ available: false, message: (err as Error).message });

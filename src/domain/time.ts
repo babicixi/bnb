@@ -36,6 +36,10 @@ export function vietnamHour(date: Date): number {
   return new Date(date.getTime() + VIETNAM_OFFSET_MS).getUTCHours();
 }
 
+export function vietnamMinute(date: Date): number {
+  return new Date(date.getTime() + VIETNAM_OFFSET_MS).getUTCMinutes();
+}
+
 export function atVietnamTime(
   dateOrKey: Date | string,
   hour: number,

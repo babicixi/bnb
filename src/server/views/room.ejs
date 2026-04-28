@@ -102,10 +102,12 @@
     <p class="muted-small">
       <% if (hourlyEnabled) { %>
         Booking type is detected automatically: same day → hourly · different days → day / multi-day.
-        Day &amp; multi-day check-in must be at or after 14:00; check-out is normalised to 11:00 on the departure day.
-        An hourly stay that crosses midnight becomes a day rate.
+        Day &amp; multi-day check-in must be at or after 14:00; standard check-out is 11:00.
+        An hourly stay that crosses midnight becomes a day rate.<br>
+        <strong>Late check-out:</strong> 11:00–12:00 free. 12:00–14:00 = 2-hour tier · 14:00–16:00 = 4-hour tier · 16:00–18:00 = 6-hour tier (rounded up). After 18:00 you're billed for an extra full day.
       <% } else { %>
-        Standard check-in 14:00, check-out 11:00. Pick a check-out date later than check-in.
+        Standard check-in 14:00, check-out 11:00. Pick a check-out date later than check-in.<br>
+        <strong>Late check-out:</strong> 11:00–12:00 free. 12:00–18:00 = hourly tier (rounded up to 2/4/6 h). After 18:00 = extra full day.
       <% } %>
     </p>
 
@@ -165,8 +167,14 @@
         if (data.available) {
           banner.className = 'availability-banner ok';
           var typeLabel = data.bookingType === 'hourly' ? 'hourly' : (data.bookingType === 'multi_day' ? 'multi-day' : 'day');
-          banner.innerHTML = '✓ Available · <strong>' + typeLabel + ' rate</strong> · total to collect: <strong>' + fmtVnd(data.amountToCollectVnd) + '</strong>' +
-            (data.convertedToDayRate ? ' (hourly past midnight → converted to day rate, check-out 11:00 next day)' : '');
+          var extras = '';
+          if (data.convertedToDayRate) {
+            extras += ' (hourly past midnight → converted to day rate, check-out 11:00 next day)';
+          }
+          if (data.lateCheckoutFeeVnd > 0) {
+            extras += ' · late check-out fee: <strong>' + fmtVnd(data.lateCheckoutFeeVnd) + '</strong>';
+          }
+          banner.innerHTML = '✓ Available · <strong>' + typeLabel + ' rate</strong> · total to collect: <strong>' + fmtVnd(data.amountToCollectVnd) + '</strong>' + extras;
           submit.disabled = false;
         } else {
           banner.className = 'availability-banner bad';

@@ -13,13 +13,27 @@ import {
   vietnamDateKey,
   vietnamDateKeysBetween,
   vietnamHour,
+  vietnamMinute,
 } from "../domain/time.js";
+
+// A check-out after this Vietnam-local hour on the natural departure day
+// rolls into another full day; a check-out between 11:00 and this cap is
+// allowed as a "late check-out" billed via the room's hourly tier.
+const LATE_CHECKOUT_LAST_HOUR = 18;
+
+function isAfterLateCheckoutCap(date: Date): boolean {
+  const h = vietnamHour(date);
+  return h > LATE_CHECKOUT_LAST_HOUR ||
+    (h === LATE_CHECKOUT_LAST_HOUR && vietnamMinute(date) > 0);
+}
 
 export interface NormalizedBookingTimes {
   bookingType: BookingType;
   checkInAt: Date;
   checkOutAt: Date;
   convertedToDayRate: boolean;
+  /** Minutes past 11:00 on the final check-out day, when late check-out is in effect. */
+  lateCheckoutMinutes: number;
 }
 
 /**
@@ -40,8 +54,13 @@ export function detectBookingType(
   const inKey = vietnamDateKey(checkInAt);
   const outKey = vietnamDateKey(checkOutAt);
   if (inKey === outKey) return "hourly";
+  // Anything past the late-checkout cap rolls into another full day, which
+  // can promote a single-day booking into a multi-day one.
+  const effectiveOutKey = isAfterLateCheckoutCap(checkOutAt)
+    ? addVietnamDays(outKey, 1)
+    : outKey;
   const inMs = Date.parse(`${inKey}T00:00:00Z`);
-  const outMs = Date.parse(`${outKey}T00:00:00Z`);
+  const outMs = Date.parse(`${effectiveOutKey}T00:00:00Z`);
   const days = Math.round((outMs - inMs) / 86_400_000);
   return days <= 1 ? "day" : "multi_day";
 }
@@ -67,6 +86,10 @@ export interface BookingPrice {
   securityDepositVnd: number;
   amountToCollectVnd: number;
   convertedToDayRate: boolean;
+  /** Late-checkout fee component bundled inside roomChargeVnd. 0 when not late. */
+  lateCheckoutFeeVnd: number;
+  /** Minutes past 11:00 used to compute the late-checkout tier. 0 when not late. */
+  lateCheckoutMinutes: number;
 }
 
 export function normalizeBookingTimes(
@@ -87,6 +110,7 @@ export function normalizeBookingTimes(
         checkInAt: requestedCheckIn,
         checkOutAt: requestedCheckOut,
         convertedToDayRate: false,
+        lateCheckoutMinutes: 0,
       };
     }
 
@@ -96,35 +120,55 @@ export function normalizeBookingTimes(
       checkInAt: requestedCheckIn,
       checkOutAt: atVietnamTime(checkoutKey, 11),
       convertedToDayRate: true,
-    };
-  }
-
-  if (bookingType === "day") {
-    if (vietnamHour(requestedCheckIn) < 14) {
-      throw new Error(
-        "Day booking check-in must be at or after 14:00 Vietnam time.",
-      );
-    }
-
-    return {
-      bookingType,
-      checkInAt: requestedCheckIn,
-      checkOutAt: atVietnamTime(addVietnamDays(requestedCheckIn, 1), 11),
-      convertedToDayRate: false,
+      lateCheckoutMinutes: 0,
     };
   }
 
   if (vietnamHour(requestedCheckIn) < 14) {
     throw new Error(
-      "Multi-day booking check-in must be at or after 14:00 Vietnam time.",
+      `${bookingType === "day" ? "Day" : "Multi-day"} booking check-in must be at or after 14:00 Vietnam time.`,
     );
   }
 
+  // Day & multi-day share the same checkout normalization. The natural last
+  // day is the Vietnam date of the requested checkout; if it's after the
+  // late-checkout cap (18:00) we add another full day; otherwise we keep
+  // the requested time and bill the late hours on top.
+  const checkInKey = vietnamDateKey(requestedCheckIn);
+  const requestedOutKey = vietnamDateKey(requestedCheckOut);
+  const overflow = isAfterLateCheckoutCap(requestedCheckOut);
+  const finalOutKey = overflow
+    ? addVietnamDays(requestedOutKey, 1)
+    : requestedOutKey;
+
+  // Late-checkout window: requested between 11:00 and 18:00 inclusive on the
+  // natural day, and we did not push to next day. Anything ≤ 11:00 is treated
+  // as a clean 11:00 checkout (no late fee).
+  let finalCheckOut = atVietnamTime(finalOutKey, 11);
+  let lateCheckoutMinutes = 0;
+  if (!overflow) {
+    const standard11 = atVietnamTime(requestedOutKey, 11).getTime();
+    if (requestedCheckOut.getTime() > standard11) {
+      finalCheckOut = requestedCheckOut;
+      lateCheckoutMinutes = Math.round(
+        (requestedCheckOut.getTime() - standard11) / 60_000,
+      );
+    }
+  }
+
+  // Decide final booking type from the spread between check-in and check-out
+  // calendar dates. Same-day-after-checkin → "day"; further → "multi_day".
+  const inMs = atVietnamTime(checkInKey, 0).getTime();
+  const outMs = atVietnamTime(finalOutKey, 0).getTime();
+  const dayDiff = Math.round((outMs - inMs) / 86_400_000);
+  const finalType: BookingType = dayDiff <= 1 ? "day" : "multi_day";
+
   return {
-    bookingType,
+    bookingType: finalType,
     checkInAt: requestedCheckIn,
-    checkOutAt: atVietnamTime(vietnamDateKey(requestedCheckOut), 11),
+    checkOutAt: finalCheckOut,
     convertedToDayRate: false,
+    lateCheckoutMinutes,
   };
 }
 
@@ -142,20 +186,38 @@ export function calculateBookingPrice(input: BookingPriceInput): BookingPrice {
     input.checkInAt,
     input.checkOutAt,
   );
-  const roomChargeVnd =
-    normalized.bookingType === "hourly" && !normalized.convertedToDayRate
-      ? calculateHourlyCharge(
+  const isHourly =
+    normalized.bookingType === "hourly" && !normalized.convertedToDayRate;
+  // For day / multi-day: bill the day rate on the night-aligned check-out
+  // (the actual checkOutAt may be the late-checkout time). The day-charge
+  // helper buckets nights between in and out — we recompute the night
+  // checkout (11:00 of finalOutKey) and add the late fee separately.
+  const baseDayCheckOut = isHourly
+    ? normalized.checkOutAt
+    : atVietnamTime(vietnamDateKey(normalized.checkOutAt), 11);
+  const baseChargeVnd = isHourly
+    ? calculateHourlyCharge(
+        input.room,
+        input.rates,
+        normalized.checkInAt,
+        normalized.checkOutAt,
+      )
+    : calculateDayCharge(
+        input.room,
+        input.rates,
+        normalized.checkInAt,
+        baseDayCheckOut,
+      );
+  const lateCheckoutFeeVnd =
+    !isHourly && normalized.lateCheckoutMinutes > 0
+      ? calculateLateCheckoutFee(
           input.room,
           input.rates,
-          normalized.checkInAt,
           normalized.checkOutAt,
+          normalized.lateCheckoutMinutes,
         )
-      : calculateDayCharge(
-          input.room,
-          input.rates,
-          normalized.checkInAt,
-          normalized.checkOutAt,
-        );
+      : 0;
+  const roomChargeVnd = baseChargeVnd + lateCheckoutFeeVnd;
   const discountAmountVnd = calculateBestDiscount({
     discounts: input.discounts ?? [],
     salesAgentId: input.salesAgentId,
@@ -174,7 +236,44 @@ export function calculateBookingPrice(input: BookingPriceInput): BookingPrice {
     securityDepositVnd: SECURITY_DEPOSIT_VND,
     amountToCollectVnd: netRoomChargeVnd + SECURITY_DEPOSIT_VND,
     convertedToDayRate: normalized.convertedToDayRate,
+    lateCheckoutFeeVnd,
+    lateCheckoutMinutes: normalized.lateCheckoutMinutes,
   };
+}
+
+/**
+ * Late-checkout fee. Standard checkout is 11:00; the hour 11:00–12:00 is a
+ * free grace period. From 12:00 to 18:00 we charge a flat tier based on how
+ * many hours past noon the guest stays (rounded up to the next tier):
+ *
+ *   12:00 < out ≤ 14:00 → 2-hour tier
+ *   14:00 < out ≤ 16:00 → 4-hour tier
+ *   16:00 < out ≤ 18:00 → 6-hour tier
+ *
+ * Past 18:00 the booking is promoted to another full day in
+ * normalizeBookingTimes, so we never see that case here.
+ */
+function calculateLateCheckoutFee(
+  room: Room,
+  rates: RoomDailyRate[],
+  checkOutAt: Date,
+  lateCheckoutMinutes: number,
+): number {
+  // hours past 11:00, then offset by the free grace hour to count "past noon".
+  const hoursPastNoon = lateCheckoutMinutes / 60 - 1;
+  if (hoursPastNoon <= 0) return 0;
+  let tierHours: number;
+  if (hoursPastNoon <= 2) tierHours = 2;
+  else if (hoursPastNoon <= 4) tierHours = 4;
+  else tierHours = 6;
+  const checkOutKey = vietnamDateKey(checkOutAt);
+  const rate = findRateForKey(room, rates, checkOutKey);
+  return pickHourlyTier(
+    tierHours,
+    rate.hourlyRateVnd,
+    rate.hourlyTiers,
+    room.baseHourlyTiers,
+  );
 }
 
 /**
