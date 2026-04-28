@@ -584,40 +584,24 @@ body.landing { background: #fff; }
 .social-card.phone-call.reservations { background: #2a7a3a; }
 .social-card.phone-call.cs { background: #1f6f9f; }
 
-.fb-row {
-  display: grid;
-  grid-template-columns: 1fr 500px;
-  gap: 1.5rem;
-  align-items: stretch;
-}
-.fb-side {
-  background: #fafafa;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.25rem 1.5rem;
-}
-.fb-side p { margin: 0.4rem 0; }
-.fb-side .btn { display: inline-block; }
 .fb-embed-wrap {
   background: #fafafa;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0;
   overflow: hidden;
-  position: relative;
-  height: 520px;
-  width: 100%;
+  /* Match the FB plugin's actual rendered box: 500 wide, 600 tall.
+     Centered horizontally so it sits as a single column on the page. */
+  width: 500px;
+  max-width: 100%;
+  height: 600px;
+  margin: 0 auto;
 }
 .fb-embed {
-  position: absolute;
-  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   border: 0;
-}
-@media (max-width: 760px) {
-  .fb-row { grid-template-columns: 1fr; }
-  .fb-embed-wrap { height: 600px; }
 }
 
 /* -------------------- Room detail page -------------------- */
@@ -754,17 +738,19 @@ body.landing { background: #fff; }
 .lightbox-nav,
 .lightbox-close {
   position: absolute;
-  background: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.18);
   color: #fff;
   border: 0;
   width: 3rem;
   height: 3rem;
   border-radius: 50%;
   font-size: 1.4rem;
+  line-height: 1;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  z-index: 1010;
 }
 .lightbox-nav:hover, .lightbox-close:hover { background: rgba(255,255,255,0.25); }
 .lightbox-prev { left: 1rem; top: 50%; transform: translateY(-50%); }

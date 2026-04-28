@@ -188,7 +188,9 @@ export function reportCleaningDamage(input: {
  * we leave those alone.
  */
 export function recomputeExtrasBalance(booking: Booking): void {
-  if (booking.status === "cancelled" || booking.status === "closed") return;
+  // Cancellations have their own refund-due math (cancellation fees, partial
+  // refunds against amounts already paid). Don't overwrite that.
+  if (booking.status === "cancelled") return;
   const extras =
     (booking.minibarChargesVnd || 0) + (booking.damageChargesVnd || 0);
   const deposit = booking.securityDepositVnd || 0;
@@ -198,6 +200,9 @@ export function recomputeExtrasBalance(booking: Booking): void {
   } else {
     booking.amountDueVnd = extras - deposit;
     booking.refundDueVnd = 0;
+    // Only flip status on live bookings — a closed booking that turns out to
+    // owe more (after a delayed minibar entry) keeps its closed status but
+    // still surfaces in /admin/extras via the amountDueVnd > 0 filter.
     const liveStatuses: ReadonlyArray<Booking["status"]> = [
       "confirmed",
       "checked_in",

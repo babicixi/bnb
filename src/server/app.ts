@@ -22,6 +22,7 @@ import { runOperationalSweep } from "../services/automation.js";
 import { notifications } from "../services/notifications.js";
 import { createTask } from "../services/tasks.js";
 import { nextId } from "../repo/memory.js";
+import { recomputeExtrasBalance } from "../services/cleaning.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..", "..");
@@ -58,6 +59,14 @@ export function createApp(opts: CreateAppOptions = {}): {
     if (loaded) {
       console.log(`▶ loaded saved state from ${opts.persistencePath}`);
     }
+  }
+  // Backfill amount-due / refund-due against current minibar+damage charges
+  // for every booking we already have. New reports do this inline; this loop
+  // catches bookings created before the fix shipped.
+  for (const booking of repo.bookings.values()) {
+    const extras =
+      (booking.minibarChargesVnd || 0) + (booking.damageChargesVnd || 0);
+    if (extras > 0) recomputeExtrasBalance(booking);
   }
   const uploadsDir = opts.uploadsDir ?? path.join(projectRoot, "uploads");
 

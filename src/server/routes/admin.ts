@@ -29,6 +29,7 @@ import {
   markCommissionPaid,
   voidCommission,
 } from "../../services/commissionLedger.js";
+import { recomputeExtrasBalance } from "../../services/cleaning.js";
 import type { RequestWithUser } from "../middleware/auth.js";
 
 function defaultRange(): { from: Date; to: Date } {
@@ -667,6 +668,8 @@ export function mountAdminRoutes(
       res.status(404).render("error", { title: "Not found", message: "" });
       return;
     }
+    // Heal any drift between extras and amountDue/refundDue on every view.
+    recomputeExtrasBalance(booking);
     const guest = repo.guests.get(booking.guestId);
     const room = repo.rooms.get(booking.roomId);
     const building = room ? repo.buildings.get(room.buildingId) : undefined;
@@ -1084,11 +1087,18 @@ export function mountAdminRoutes(
   });
 
   router.get("/extras", (_req, res) => {
-    // Extras only apply to live bookings — cancelled/closed don't owe more.
+    // Heal any drift first so bookings with high minibar/damage charges that
+    // were created before the fix still show up here.
+    for (const b of repo.bookings.values()) {
+      const ex = (b.minibarChargesVnd || 0) + (b.damageChargesVnd || 0);
+      if (ex > 0) recomputeExtrasBalance(b);
+    }
+    // Surface anything with money outstanding (incl. closed bookings whose
+    // minibar charges came in after checkout — admins still need to chase).
+    // Cancellations are handled by their own refund flow.
     const bookings = Array.from(repo.bookings.values()).filter(
       (b) =>
         b.status !== "cancelled" &&
-        b.status !== "closed" &&
         (b.status === "extra_payment_required" || b.amountDueVnd > 0),
     );
     res.render("admin/list-finance", {

@@ -48,16 +48,53 @@ export const FEATURES: FeatureDef[] = [
 
 const featureMap = new Map<string, FeatureDef>(FEATURES.map((f) => [f.key, f]));
 
+/**
+ * Legacy free-form features (e.g. "Balcony", "Smart TV", "65\" Projector")
+ * are matched into the catalog via a normalized lookup so they pick up the
+ * right icon on the public room page even if the admin hasn't migrated yet.
+ *
+ * Match order: exact key → normalized exact (lowercase, no punctuation/space)
+ * → substring of either EN or VI label inside the feature string.
+ */
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+const normalizedKeyMap = new Map<string, FeatureDef>();
+for (const f of FEATURES) {
+  normalizedKeyMap.set(normalize(f.key), f);
+  normalizedKeyMap.set(normalize(f.en), f);
+  normalizedKeyMap.set(normalize(f.vi), f);
+}
+
+function resolve(value: string): FeatureDef | undefined {
+  if (!value) return undefined;
+  if (featureMap.has(value)) return featureMap.get(value);
+  const norm = normalize(value);
+  const exact = normalizedKeyMap.get(norm);
+  if (exact) return exact;
+  // Substring fallback so things like "65 inch projector" still find projector_65.
+  for (const f of FEATURES) {
+    if (
+      norm.includes(normalize(f.en)) ||
+      normalize(f.en).includes(norm) ||
+      norm.includes(normalize(f.vi))
+    ) {
+      return f;
+    }
+  }
+  return undefined;
+}
+
 export function featureLabel(key: string, locale: "en" | "vi"): string {
-  const def = featureMap.get(key);
+  const def = resolve(key);
   if (!def) return key;
   return locale === "vi" ? def.vi : def.en;
 }
 
 export function featureIcon(key: string): string {
-  return featureMap.get(key)?.icon ?? "•";
+  return resolve(key)?.icon ?? "•";
 }
 
 export function isKnownFeature(key: string): boolean {
-  return featureMap.has(key);
+  return resolve(key) !== undefined;
 }

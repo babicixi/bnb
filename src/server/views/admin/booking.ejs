@@ -101,6 +101,10 @@
 
 <div class="card">
   <h2>Money</h2>
+  <%
+    var extras = (booking.minibarChargesVnd || 0) + (booking.damageChargesVnd || 0);
+    var totalCollectable = booking.finalRoomChargeVnd + booking.securityDepositVnd + extras;
+  %>
   <table>
     <tr><th>Room charge</th><td><%= formatVnd(booking.finalRoomChargeVnd) %></td>
         <th>Discount</th><td><%= formatVnd(booking.discountAmountVnd) %></td></tr>
@@ -109,9 +113,11 @@
     <tr><th>Damages</th><td><%= formatVnd(booking.damageChargesVnd) %></td>
         <th>Commission (calc.)</th><td><%= formatVnd(booking.calculatedCommissionVnd) %></td></tr>
     <tr><th>Amount paid</th><td><%= formatVnd(booking.amountPaidVnd) %></td>
-        <th>Amount due</th><td><strong><%= formatVnd(booking.amountDueVnd) %></strong></td></tr>
+        <th>Amount due</th><td><strong class="<%= booking.amountDueVnd > 0 ? 'rc-neg' : '' %>"><%= formatVnd(booking.amountDueVnd) %></strong>
+          <% if (extras > 0 && booking.amountDueVnd > 0) { %><br><span class="muted-small">extras (<%= formatVnd(extras) %>) exceed deposit (<%= formatVnd(booking.securityDepositVnd) %>)</span><% } %></td></tr>
     <tr><th>Refund due</th><td><strong><%= formatVnd(booking.refundDueVnd) %></strong></td>
-        <th>Total collectable</th><td><%= formatVnd(booking.finalRoomChargeVnd + booking.securityDepositVnd) %></td></tr>
+        <th>Total collectable</th><td><strong><%= formatVnd(totalCollectable) %></strong>
+          <% if (extras > 0) { %><br><span class="muted-small">incl. <%= formatVnd(extras) %> extras</span><% } %></td></tr>
   </table>
 </div>
 
