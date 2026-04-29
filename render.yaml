@@ -1,0 +1,26 @@
+# Render Blueprint — one-click deploy of Cixi Wanderlust.
+# Connect this repo on Render → New + → Blueprint, and Render will create
+# the web service + persistent disk wired up to the env vars below.
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: cixi-wanderlust
+    runtime: node
+    plan: starter           # ~$7/mo. Use "free" for evaluation (no persistent disk).
+    region: singapore       # closest to Vietnam visitors
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true        # redeploy on every push to the connected branch
+    disk:
+      name: cixi-data
+      mountPath: /data
+      sizeGB: 10            # plenty of headroom for state.json + uploads
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /data
+      - key: SESSION_SECRET
+        generateValue: true # Render generates a long random string once

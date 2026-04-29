@@ -71,6 +71,11 @@ export function createApp(opts: CreateAppOptions = {}): {
   const uploadsDir = opts.uploadsDir ?? path.join(projectRoot, "uploads");
 
   const app = express();
+  // Behind Render / Fly / a reverse proxy, trust the X-Forwarded-* headers so
+  // req.secure is correct and secure cookies actually get set.
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
   app.set("views", path.join(__dirname, "views"));
   app.set("view engine", "ejs");
   app.use(express.urlencoded({ extended: true }));
@@ -81,9 +86,19 @@ export function createApp(opts: CreateAppOptions = {}): {
       secret: opts.sessionSecret ?? "dev-secret-change-me",
       resave: false,
       saveUninitialized: false,
-      cookie: { httpOnly: true, sameSite: "lax", secure: false },
+      cookie: {
+        httpOnly: true,
+        sameSite: "lax",
+        // Require HTTPS in production so the session cookie is never sent in clear.
+        secure: process.env.NODE_ENV === "production",
+      },
     }),
   );
+
+  // Bare-bones health check — Render/Fly hit this to know the instance is live.
+  app.get("/healthz", (_req, res) => {
+    res.json({ ok: true, ts: new Date().toISOString() });
+  });
   app.use(express.static(path.join(projectRoot, "public")));
   app.use("/uploads", express.static(uploadsDir));
   app.use(attachCurrentUser((id) => repo.users.get(id)));
