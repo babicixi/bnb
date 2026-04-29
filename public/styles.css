@@ -608,106 +608,40 @@ body.landing { background: #fff; }
 .room-detail { padding: 0 0 2rem; }
 .room-detail-header { margin-bottom: 1.25rem; }
 
-/* Hero gallery: large feature photo + 2x2 grid of side photos. */
-.media-gallery {
+/* Compact photo strip — small thumbnails so the room *page* (info + booking)
+   gets the visual weight. Click any to open the lightbox. */
+.photo-strip {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  border-radius: 14px;
-  overflow: hidden;
-  aspect-ratio: 16 / 9;
-  max-height: 540px;
+  margin: 0 0 0.4rem;
 }
-.media-hero {
+.photo-strip-tile {
   background: #f1ebeb center/cover no-repeat;
-  border-radius: 0;
-  display: block;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  height: 110px;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
 }
-.media-side {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 0.5rem;
-}
-.media-tile {
-  background: #f1ebeb center/cover no-repeat;
-  display: block;
-  min-height: 0;
-}
-.media-tile-empty { background: #f5efef; }
+.photo-strip-tile:hover { filter: brightness(0.92); transform: translateY(-1px); }
 
-@media (max-width: 720px) {
-  .media-gallery {
-    grid-template-columns: 1fr;
-    aspect-ratio: 4 / 3;
-    max-height: 360px;
-  }
-  .media-side { display: none; }
-}
-
-.photo-row {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
 .video-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1rem;
-  margin: 1rem 0;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+  margin: 0;
 }
 .video-tile { border-radius: 10px; overflow: hidden; }
-.video-tile iframe, .video-tile video {
+.video-tile iframe,
+.video-tile video {
   width: 100%;
   aspect-ratio: 16 / 9;
   display: block;
   border: 0;
 }
 
-/* Gallery: hero is a button now, supports slideshow + click-to-open-lightbox. */
-.media-gallery .media-hero,
-.media-gallery .media-tile {
-  position: relative;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  transition: filter 0.15s ease;
-}
-.media-gallery .media-hero:hover { filter: brightness(0.95); }
-.media-gallery .media-tile:hover { filter: brightness(0.92); }
-.gallery-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  background: rgba(0,0,0,0.45);
-  color: #fff;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  cursor: pointer;
-  z-index: 2;
-  user-select: none;
-}
-.gallery-arrow:hover { background: rgba(0,0,0,0.65); }
-.gallery-prev { left: 0.75rem; }
-.gallery-next { right: 0.75rem; }
-.gallery-counter {
-  position: absolute;
-  bottom: 0.75rem;
-  right: 0.75rem;
-  background: rgba(0,0,0,0.55);
-  color: #fff;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  z-index: 2;
-}
 .link-button {
   background: none;
   border: 0;
@@ -718,16 +652,19 @@ body.landing { background: #fff; }
   font: inherit;
 }
 
-/* Lightbox */
+/* Lightbox — hidden by default; .is-open turns it into a centered overlay.
+   The previous default of `display: flex` overrode the `hidden` attribute,
+   leaving the modal visible on page load. */
 .lightbox {
+  display: none;
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.92);
-  display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
 }
+.lightbox.is-open { display: flex; }
 .lightbox-img {
   max-width: 92vw;
   max-height: 88vh;
