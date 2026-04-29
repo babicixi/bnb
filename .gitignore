@@ -10,3 +10,7 @@ uploads
 .venv
 *.iml
 ~$*
+# Claude Code workspace state — contains local prompts/settings, never share
+.claude/
+# Personal/working docs that don't belong in the public repo
+*.docx
