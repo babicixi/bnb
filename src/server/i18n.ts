@@ -8,8 +8,8 @@ const dict: Record<string, Record<Locale, string>> = {
     vi: "Cixi Wanderlust",
   },
   "site.tagline": {
-    en: "Boutique serviced apartments in Hanoi — book by the hour, the day, or the week.",
-    vi: "Căn hộ dịch vụ boutique tại Hà Nội — đặt theo giờ, theo ngày hoặc theo tuần.",
+    en: "Eclectic homestays — pure chill.",
+    vi: "Homestay đa phong cách cực chill.",
   },
   "nav.home": { en: "Home", vi: "Trang chủ" },
   "nav.lookup": { en: "Find my booking", vi: "Tra cứu đặt phòng" },
