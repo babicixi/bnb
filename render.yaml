@@ -5,7 +5,7 @@
 
 services:
   - type: web
-    name: bnb
+    name: cixi-bnb
     runtime: node
     plan: starter           # ~$7/mo. Persistent disks require a paid plan.
     region: singapore       # closest to Vietnam visitors
@@ -15,7 +15,7 @@ services:
     healthCheckPath: /healthz
     autoDeploy: true        # redeploy on every push to the connected branch
     disk:
-      name: bnb-data
+      name: cixi-bnb-data
       mountPath: /data
       sizeGB: 10            # plenty of headroom for state.json + uploads
     envVars:
