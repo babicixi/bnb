@@ -27,7 +27,7 @@ The repo is deploy-ready. The relevant pieces:
 ## Step 1 — Push this repo to GitHub
 
 ```bash
-git remote add origin git@github.com:<your-handle>/cixi-wanderlust.git
+git remote add origin git@github.com:<your-handle>/bnb.git
 git push -u origin master
 ```
 
@@ -50,7 +50,7 @@ DNS to Cloudflare for cleaner apex-domain handling.
    + auto-generated `SESSION_SECRET`. Confirm.
 3. Wait ~3–5 minutes for the first build. The deploy log will show
    `▶ booking app listening on http://localhost:10000` and the auto-generated
-   URL `https://cixi-wanderlust-XXXX.onrender.com` becomes live.
+   URL `https://bnb-XXXX.onrender.com` becomes live.
 4. Visit that URL to confirm everything renders.
 
 **Manual fallback** (if you want to skip the blueprint): New + → Web Service
@@ -66,7 +66,7 @@ persistent disk mounted at `/data`**, set env vars
    `cixiapartments.com` and `www.cixiapartments.com`.
 2. Render shows you the DNS records to create. Typically:
    - `cixiapartments.com` (apex) → an `A` record pointing at Render's IP, or
-     a `CNAME` to `cixi-wanderlust-XXXX.onrender.com` if your DNS provider
+     a `CNAME` to `bnb-XXXX.onrender.com` if your DNS provider
      supports CNAME flattening (Cloudflare does).
    - `www.cixiapartments.com` → `CNAME` to the same Render hostname.
 3. Add those records in Cloudflare DNS (or your registrar's DNS panel).
@@ -126,7 +126,7 @@ app on the same domain:
 - **Code changes**: `git push` to the connected branch → Render auto-deploys
   in ~1 minute. Persistent disk (state + uploads) is preserved across deploys.
 - **Landing-page changes**: designer publishes in Webflow → live within seconds.
-- **Logs**: Render dashboard → Logs tab. Or `render logs --service cixi-wanderlust`
+- **Logs**: Render dashboard → Logs tab. Or `render logs --service bnb`
   if you install the Render CLI.
 
 ## Environment variables reference

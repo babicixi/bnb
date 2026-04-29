@@ -5,7 +5,7 @@
 
 services:
   - type: web
-    name: cixi-wanderlust
+    name: bnb
     runtime: node
     plan: starter           # ~$7/mo. Use "free" for evaluation (no persistent disk).
     region: singapore       # closest to Vietnam visitors
