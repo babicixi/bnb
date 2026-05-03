@@ -4,8 +4,8 @@ export const DEFAULT_LOCALE: Locale = "vi";
 
 const dict: Record<string, Record<Locale, string>> = {
   "site.title": {
-    en: "Cixi Wanderlust",
-    vi: "Cixi Wanderlust",
+    en: "Stay",
+    vi: "Stay",
   },
   "site.tagline": {
     en: "Eclectic homestays — pure chill.",
@@ -56,8 +56,8 @@ const dict: Record<string, Record<Locale, string>> = {
     vi: "Cập nhật mới từ Facebook",
   },
   "landing.fb_blurb": {
-    en: "Recent rooms, guest moments, and seasonal promotions — straight from facebook.com/cixi.serviceapartments.",
-    vi: "Phòng mới, khoảnh khắc khách lưu trú và khuyến mãi theo mùa — từ facebook.com/cixi.serviceapartments.",
+    en: "Recent rooms, guest moments, and seasonal promotions on our Facebook page.",
+    vi: "Phòng mới, khoảnh khắc khách lưu trú và khuyến mãi theo mùa trên Facebook.",
   },
   "landing.fb_visit": {
     en: "Visit our Facebook page",
@@ -140,8 +140,8 @@ const dict: Record<string, Record<Locale, string>> = {
   },
 
   "footer.brand_line": {
-    en: "© {0} Cixi Wanderlust · Hanoi",
-    vi: "© {0} Cixi Wanderlust · Hà Nội",
+    en: "© {0} Stay · Hanoi",
+    vi: "© {0} Stay · Hà Nội",
   },
   "footer.find_reservation": {
     en: "Find your reservation",

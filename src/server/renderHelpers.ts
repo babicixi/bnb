@@ -44,6 +44,21 @@ export function attachLocaleAndHelpers(
   ).currentUser;
   res.locals.currentPath = req.path;
   res.locals.videoEmbed = videoEmbedFor;
+  // Brand contact + social handles. Templates render conditionally so the
+  // landing stays usable when these are empty (generic / starter mode).
+  res.locals.brand = {
+    fbUrl: process.env.BRAND_FB_URL || "",
+    igUrl: process.env.BRAND_IG_URL || "",
+    ttUrl: process.env.BRAND_TT_URL || "",
+    fbHandle: process.env.BRAND_FB_HANDLE || "",
+    igHandle: process.env.BRAND_IG_HANDLE || "",
+    ttHandle: process.env.BRAND_TT_HANDLE || "",
+    phoneReservations: process.env.BRAND_PHONE_RESERVATIONS || "",
+    phoneCs: process.env.BRAND_PHONE_CS || "",
+    bankName: process.env.BRAND_BANK_NAME || "",
+    bankAccountNumber: process.env.BRAND_BANK_ACCOUNT_NUMBER || "",
+    bankAccountHolder: process.env.BRAND_BANK_ACCOUNT_HOLDER || "",
+  };
   res.locals.featureCatalog = FEATURES;
   res.locals.featureLabel = (key: string) => featureLabel(key, locale);
   res.locals.featureIcon = featureIcon;

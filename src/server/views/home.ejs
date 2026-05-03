@@ -66,74 +66,110 @@
   <% }) %>
 </section>
 
+<%
+  // Contact + social handles come from BRAND_* env vars via res.locals.brand.
+  // Set BRAND_FB_URL / BRAND_IG_URL / BRAND_TT_URL / BRAND_PHONE_RESERVATIONS /
+  // BRAND_PHONE_CS to surface them on the landing page.
+  var fbUrl = brand.fbUrl;
+  var igUrl = brand.igUrl;
+  var ttUrl = brand.ttUrl;
+  var fbHandle = brand.fbHandle;
+  var igHandle = brand.igHandle;
+  var ttHandle = brand.ttHandle;
+  var phoneRes = brand.phoneReservations;
+  var phoneCs  = brand.phoneCs;
+  function telHref(p){ return p ? 'tel:' + p.replace(/[^0-9+]/g, '') : '#'; }
+  var fbHref = fbUrl ? encodeURIComponent(fbUrl) : '';
+%>
+
+<% if (fbUrl || igUrl || ttUrl || phoneRes || phoneCs) { %>
 <section class="section" style="text-align:center;">
   <h2><%= t('landing.talk_heading') %></h2>
   <p class="lede"><%= t('landing.talk_lede') %></p>
+  <% if (fbUrl || igUrl || ttUrl) { %>
   <div class="social-row">
-    <a class="social-card facebook" href="https://www.facebook.com/cixi.serviceapartments" target="_blank" rel="noopener">
+    <% if (fbUrl) { %>
+    <a class="social-card facebook" href="<%= fbUrl %>" target="_blank" rel="noopener">
       <span class="social-icon" aria-hidden="true">f</span>
       <div>
         <strong><%= t('landing.fb_message') %></strong>
-        <p>cixi.serviceapartments</p>
+        <p><%= fbHandle %></p>
       </div>
     </a>
-    <a class="social-card instagram" href="https://www.instagram.com/cixi.apartment" target="_blank" rel="noopener">
+    <% } %>
+    <% if (igUrl) { %>
+    <a class="social-card instagram" href="<%= igUrl %>" target="_blank" rel="noopener">
       <span class="social-icon" aria-hidden="true">📷</span>
       <div>
         <strong><%= t('landing.ig_message') %></strong>
-        <p>@cixi.apartment</p>
+        <p><%= igHandle %></p>
       </div>
     </a>
-    <a class="social-card tiktok" href="https://www.tiktok.com/@apartmentcixi" target="_blank" rel="noopener">
+    <% } %>
+    <% if (ttUrl) { %>
+    <a class="social-card tiktok" href="<%= ttUrl %>" target="_blank" rel="noopener">
       <span class="social-icon" aria-hidden="true">🎵</span>
       <div>
         <strong><%= t('landing.tt_watch') %></strong>
-        <p>@apartmentcixi</p>
+        <p><%= ttHandle %></p>
       </div>
     </a>
+    <% } %>
   </div>
+  <% } %>
+  <% if (phoneRes || phoneCs) { %>
   <div class="social-row">
-    <a class="social-card phone-call reservations" href="tel:0966699738">
+    <% if (phoneRes) { %>
+    <a class="social-card phone-call reservations" href="<%= telHref(phoneRes) %>">
       <span class="social-icon" aria-hidden="true">☎</span>
       <div>
         <strong><%= t('landing.call_reservations') %></strong>
-        <p>0966.699.738</p>
+        <p><%= phoneRes %></p>
       </div>
     </a>
-    <a class="social-card phone-call cs" href="tel:0988643307">
+    <% } %>
+    <% if (phoneCs) { %>
+    <a class="social-card phone-call cs" href="<%= telHref(phoneCs) %>">
       <span class="social-icon" aria-hidden="true">☎</span>
       <div>
         <strong><%= t('landing.call_cs') %></strong>
-        <p>0988.643.307</p>
+        <p><%= phoneCs %></p>
       </div>
     </a>
+    <% } %>
   </div>
+  <% } %>
 </section>
+<% } %>
 
+<% if (fbUrl) { %>
 <section class="section" style="text-align:center;">
   <h2><%= t('landing.fb_heading') %></h2>
   <div class="fb-embed-wrap">
     <iframe
-      src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fcixi.serviceapartments&tabs=timeline&width=500&height=600&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=true"
+      src="https://www.facebook.com/plugins/page.php?href=<%= fbHref %>&tabs=timeline&width=500&height=600&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=true"
       class="fb-embed"
       scrolling="no" frameborder="0" allowfullscreen="true"
       allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
       loading="lazy"></iframe>
   </div>
 </section>
+<% } %>
 
 <footer class="landing-footer">
   <p style="margin:0 0 0.5rem;"><%= t('footer.brand_line', new Date().getFullYear()) %></p>
   <p style="margin:0;">
-    <a href="tel:0966699738" style="color:#fff;"><%= t('landing.reservations_label') %> 0966.699.738</a> ·
-    <a href="tel:0988643307" style="color:#fff;"><%= t('landing.cs_label') %> 0988.643.307</a> ·
+    <% if (phoneRes) { %><a href="<%= telHref(phoneRes) %>" style="color:#fff;"><%= t('landing.reservations_label') %> <%= phoneRes %></a> · <% } %>
+    <% if (phoneCs)  { %><a href="<%= telHref(phoneCs)  %>" style="color:#fff;"><%= t('landing.cs_label') %> <%= phoneCs  %></a> · <% } %>
     <a href="/lookup" style="color:#fff;"><%= t('footer.find_reservation') %></a>
   </p>
+  <% if (fbUrl || igUrl || ttUrl) { %>
   <p style="margin:0.6rem 0 0;">
-    <a href="https://www.facebook.com/cixi.serviceapartments" target="_blank" rel="noopener" style="color:#aaa; margin-right:0.75rem;">Facebook</a>
-    <a href="https://www.instagram.com/cixi.apartment" target="_blank" rel="noopener" style="color:#aaa; margin-right:0.75rem;">Instagram</a>
-    <a href="https://www.tiktok.com/@apartmentcixi" target="_blank" rel="noopener" style="color:#aaa;">TikTok</a>
+    <% if (fbUrl) { %><a href="<%= fbUrl %>" target="_blank" rel="noopener" style="color:#aaa; margin-right:0.75rem;">Facebook</a><% } %>
+    <% if (igUrl) { %><a href="<%= igUrl %>" target="_blank" rel="noopener" style="color:#aaa; margin-right:0.75rem;">Instagram</a><% } %>
+    <% if (ttUrl) { %><a href="<%= ttUrl %>" target="_blank" rel="noopener" style="color:#aaa;">TikTok</a><% } %>
   </p>
+  <% } %>
 </footer>
 
 <%- include('_footer') %>

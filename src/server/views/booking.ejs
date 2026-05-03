@@ -48,13 +48,21 @@
       })();
     </script>
   <% } %>
-  <p><%= t('booking.bank_label') %></p>
-  <pre>BANK:      BIDV
-ACCOUNT:   8601099668
-NAME:      Ho Kinh Doanh Cixi Wanderlust
+  <% if (brand.bankName && brand.bankAccountNumber) { %>
+    <p><%= t('booking.bank_label') %></p>
+    <pre>BANK:      <%= brand.bankName %>
+ACCOUNT:   <%= brand.bankAccountNumber %><% if (brand.bankAccountHolder) { %>
+NAME:      <%= brand.bankAccountHolder %><% } %>
 REFERENCE: <%= booking.bookingNumber %>
 AMOUNT:    <%= formatVnd(booking.amountDueVnd) %></pre>
-  <p class="muted-small"><%= t('booking.bank_note', booking.bookingNumber) %></p>
+    <p class="muted-small"><%= t('booking.bank_note', booking.bookingNumber) %></p>
+  <% } else { %>
+    <p class="muted-small">
+      <strong>Reference:</strong> <%= booking.bookingNumber %><br>
+      <strong>Amount:</strong> <%= formatVnd(booking.amountDueVnd) %><br>
+      Bank-transfer details will be sent to you separately. Once you've paid, upload the screenshot below.
+    </p>
+  <% } %>
   <form method="post" action="/book/<%= booking.bookingNumber %>/upload-proof" enctype="multipart/form-data">
     <label><%= t('booking.upload_proof') %></label>
     <input type="file" name="screenshot" accept="image/*" required />
