@@ -14,3 +14,5 @@ uploads
 .claude/
 # Personal/working docs that don't belong in the public repo
 *.docx
+# Local credentials (API tokens for Render, Cloudflare, GitHub). NEVER commit.
+.local/
