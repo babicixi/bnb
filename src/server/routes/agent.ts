@@ -300,6 +300,7 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
         rates: repo.rates,
         discounts,
         salesAgentId: agent.id,
+        securityDepositVnd: repo.globalSecurityDepositVnd,
       });
     } catch (err) {
       res.status(400).render("error", {
@@ -346,6 +347,7 @@ export function mountAgentRoutes(app: Express, repo: Repository): void {
       bookingType,
       salesAgentId: agent.id,
       discounts,
+      securityDepositVnd: repo.globalSecurityDepositVnd,
     });
     booking.notes = data.notes?.trim() || undefined;
     booking.source = "agent";

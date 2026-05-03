@@ -22,6 +22,8 @@ export interface CreateBookingFromHoldInput {
   salesAgentId?: Id;
   discounts?: Discount[];
   paymentId?: Id;
+  /** Default deposit applied to this booking; pass repo.globalSecurityDepositVnd. */
+  securityDepositVnd?: number;
   now?: Date;
 }
 
@@ -49,6 +51,7 @@ export function createBookingFromHold(
     rates: input.rates,
     discounts: input.discounts,
     salesAgentId: input.salesAgentId,
+    securityDepositVnd: input.securityDepositVnd,
   });
 
   const booking: Booking = {

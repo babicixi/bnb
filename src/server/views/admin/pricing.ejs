@@ -12,6 +12,24 @@
 </p>
 <% if (flash) { %><p class="success">Saved (<%= flash %>).</p><% } %>
 
+<div class="card">
+  <h2>Default security deposit</h2>
+  <p class="muted-small">
+    Added to the amount-to-collect on every <strong>new</strong> booking. Existing bookings keep
+    the deposit recorded on them when they were created. Set to <code>0</code> to skip the deposit
+    entirely. Currently: <strong><%= formatVnd(globalSecurityDepositVnd) %></strong>.
+  </p>
+  <form method="post" action="/admin/pricing/security-deposit" style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
+    <div>
+      <label>Deposit (₫'000)</label>
+      <input type="number" name="depositK" min="0" step="25" value="<%= globalSecurityDepositVnd / 1000 %>" required style="max-width:140px" />
+    </div>
+    <div>
+      <button type="submit">Save deposit</button>
+    </div>
+  </form>
+</div>
+
 <div class="card room-tab-card">
   <% buildings.forEach(function(b){
        var bRooms = rooms.filter(function(rr){ return rr.buildingId === b.id; });

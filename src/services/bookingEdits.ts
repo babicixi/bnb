@@ -25,6 +25,9 @@ export function editBookingTimes(input: {
     rates: input.rates,
     discounts: input.discounts,
     salesAgentId: input.booking.salesAgentId,
+    // Preserve the deposit recorded on the booking — don't retroactively
+    // apply a different global default to a booking the guest already paid for.
+    securityDepositVnd: input.booking.securityDepositVnd,
   });
   const newTotal = price.amountToCollectVnd;
 

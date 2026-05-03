@@ -149,6 +149,7 @@ export function mountBookingRoutes(
         checkOutAt,
         room,
         rates: repo.rates,
+        securityDepositVnd: repo.globalSecurityDepositVnd,
       });
       res.json({
         available: true,
@@ -233,6 +234,7 @@ export function mountBookingRoutes(
         checkOutAt,
         room,
         rates: repo.rates,
+        securityDepositVnd: repo.globalSecurityDepositVnd,
       });
     } catch (err) {
       res.status(400).render("error", {
@@ -277,6 +279,7 @@ export function mountBookingRoutes(
       rates: repo.rates,
       bookingType,
       salesAgentId: undefined,
+      securityDepositVnd: repo.globalSecurityDepositVnd,
     });
     booking.notes = data.notes?.trim() || undefined;
     booking.source = "guest";

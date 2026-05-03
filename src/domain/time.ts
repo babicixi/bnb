@@ -1,6 +1,13 @@
 export const CLEANING_BUFFER_MINUTES = 60;
 export const HOLD_MINUTES = 15;
-export const SECURITY_DEPOSIT_VND = 500_000;
+/**
+ * Fallback security deposit when none is configured on the repo. The admin
+ * sets the live value at /admin/pricing → "Default security deposit"; bookings
+ * always receive the value via BookingPriceInput.securityDepositVnd, so this
+ * constant is only the default of last resort (e.g. unit tests that don't
+ * explicitly opt in).
+ */
+export const SECURITY_DEPOSIT_VND = 0;
 export const VIETNAM_UTC_OFFSET_MINUTES = 7 * 60;
 
 const VIETNAM_OFFSET_MS = VIETNAM_UTC_OFFSET_MINUTES * 60_000;

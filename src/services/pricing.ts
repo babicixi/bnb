@@ -74,6 +74,13 @@ export interface BookingPriceInput {
   discounts?: Discount[];
   salesAgentId?: Id;
   asOfDate?: string;
+  /**
+   * Security deposit added to the amount-to-collect. Callers should pass
+   * `repo.globalSecurityDepositVnd` here. Falls back to SECURITY_DEPOSIT_VND
+   * (0 by default) when omitted, so unit tests don't have to plumb a deposit
+   * through unless they're asserting against it.
+   */
+  securityDepositVnd?: number;
 }
 
 export interface BookingPrice {
@@ -226,6 +233,7 @@ export function calculateBookingPrice(input: BookingPriceInput): BookingPrice {
   });
   const netRoomChargeVnd = Math.max(0, roomChargeVnd - discountAmountVnd);
 
+  const securityDepositVnd = input.securityDepositVnd ?? SECURITY_DEPOSIT_VND;
   return {
     bookingType: normalized.bookingType,
     checkInAt: normalized.checkInAt,
@@ -233,8 +241,8 @@ export function calculateBookingPrice(input: BookingPriceInput): BookingPrice {
     roomChargeVnd,
     discountAmountVnd,
     netRoomChargeVnd,
-    securityDepositVnd: SECURITY_DEPOSIT_VND,
-    amountToCollectVnd: netRoomChargeVnd + SECURITY_DEPOSIT_VND,
+    securityDepositVnd,
+    amountToCollectVnd: netRoomChargeVnd + securityDepositVnd,
     convertedToDayRate: normalized.convertedToDayRate,
     lateCheckoutFeeVnd,
     lateCheckoutMinutes: normalized.lateCheckoutMinutes,

@@ -398,6 +398,9 @@ describe("pricing", () => {
       room,
       rates,
       discounts,
+      // Default deposit is 0 system-wide now; pass 500k here so this test
+      // still asserts the deposit is added to amount-to-collect.
+      securityDepositVnd: 500_000,
     });
 
     expect(price.discountAmountVnd).toBe(100_000);

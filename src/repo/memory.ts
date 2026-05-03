@@ -61,6 +61,9 @@ export interface Repository {
   cleanerPayments: CleanerPayrollPayment[];
   cancellationPolicy: CancellationFeeTier[];
 
+  /** Default security deposit added to every new booking. Admin-editable on /admin/pricing. */
+  globalSecurityDepositVnd: number;
+
   bookingNumberCounter: { value: number };
 }
 
@@ -100,6 +103,8 @@ export function createRepository(): Repository {
     agentPayments: [],
     cleanerPayments: [],
     cancellationPolicy: DEFAULT_CANCELLATION_POLICY.map((t) => ({ ...t })),
+    // Defaults to 0; admin sets the live value on /admin/pricing.
+    globalSecurityDepositVnd: 0,
     bookingNumberCounter: { value: 0 },
   };
 }

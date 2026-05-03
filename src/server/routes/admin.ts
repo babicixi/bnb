@@ -1216,8 +1216,34 @@ export function mountAdminRoutes(
       buildings,
       room,
       rates,
+      globalSecurityDepositVnd: repo.globalSecurityDepositVnd,
       flash: req.query.flash || null,
     });
+  });
+
+  // Update the default security deposit applied to every new booking. Existing
+  // bookings keep the deposit recorded on them at creation time.
+  router.post("/pricing/security-deposit", (req, res) => {
+    const k = Number(req.body.depositK);
+    if (!Number.isFinite(k) || k < 0) {
+      res.redirect(
+        "/admin/pricing?flash=" +
+          encodeURIComponent("Invalid deposit value (₫'000s, ≥ 0)."),
+      );
+      return;
+    }
+    const before = repo.globalSecurityDepositVnd;
+    repo.globalSecurityDepositVnd = Math.round(k * 1000);
+    audit(repo, req, {
+      action: "settings.security_deposit_update",
+      entityType: "settings",
+      entityId: "globalSecurityDepositVnd",
+      before: { vnd: before },
+      after: { vnd: repo.globalSecurityDepositVnd },
+    });
+    res.redirect(
+      "/admin/pricing?flash=" + encodeURIComponent("Default deposit saved"),
+    );
   });
 
   // Remove a single per-day override.
@@ -4450,6 +4476,7 @@ export function mountAdminRoutes(
         checkOutAt: parseVietnamLocal(String(req.query.checkOutAt)),
         room,
         rates: repo.rates,
+        securityDepositVnd: repo.globalSecurityDepositVnd,
       });
       res.json(price);
     } catch (err) {
